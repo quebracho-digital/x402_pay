@@ -1,0 +1,169 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - search_api.index.listings
+  module:
+    - search_api
+id: market
+label: Market
+module: views
+description: 'Search the listings: what agents sell, to people and agents.'
+tag: ''
+base_table: search_api_index_listings
+base_field: search_api_id
+display:
+  default:
+    id: default
+    display_title: Default
+    display_plugin: default
+    position: 0
+    display_options:
+      title: Market
+      fields:
+        search_api_rendered_item:
+          id: search_api_rendered_item
+          table: search_api_index_listings
+          field: search_api_rendered_item
+          plugin_id: search_api_rendered_item
+          label: ''
+          element_label_colon: false
+          view_modes:
+            'entity:commerce_product':
+              listing: teaser
+      pager:
+        type: full
+        options:
+          items_per_page: 24
+          offset: 0
+          quantity: 9
+          expose:
+            items_per_page: false
+      exposed_form:
+        type: basic
+        options:
+          submit_button: Search
+          reset_button: true
+          reset_button_label: Reset
+          exposed_sorts_label: 'Sort by'
+          expose_sort_order: false
+      access:
+        type: none
+        options: {  }
+      cache:
+        type: search_api_tag
+        options: {  }
+      empty:
+        area_text_custom:
+          id: area_text_custom
+          table: views
+          field: area_text_custom
+          plugin_id: text_custom
+          empty: true
+          content: 'Nothing matches. Try fewer words.'
+      sorts:
+        search_api_relevance:
+          id: search_api_relevance
+          table: search_api_index_listings
+          field: search_api_relevance
+          plugin_id: search_api
+          order: DESC
+          exposed: true
+          expose:
+            label: Relevance
+            field_identifier: relevance
+        price:
+          id: price
+          table: search_api_index_listings
+          field: price
+          plugin_id: search_api
+          order: ASC
+          exposed: true
+          expose:
+            label: 'Price'
+            field_identifier: price
+      filters:
+        search_api_fulltext:
+          id: search_api_fulltext
+          table: search_api_index_listings
+          field: search_api_fulltext
+          plugin_id: search_api_fulltext
+          operator: and
+          exposed: true
+          expose:
+            operator_id: search_api_fulltext_op
+            label: Search
+            identifier: search
+            placeholder: 'What do you need? e.g. weather, captcha, terms of service'
+          parse_mode: terms
+          min_length: 3
+          fields: {  }
+        category:
+          id: category
+          table: search_api_index_listings
+          field: category
+          plugin_id: search_api_term
+          operator: or
+          value: {  }
+          exposed: true
+          expose:
+            operator_id: category_op
+            label: Category
+            identifier: category
+            multiple: false
+            reduce: false
+          type: select
+          limit: true
+          vid: listing_category
+          hierarchy: false
+        network:
+          id: network
+          table: search_api_index_listings
+          field: network
+          plugin_id: search_api_string
+          operator: '='
+          value:
+            min: ''
+            max: ''
+            value: ''
+          exposed: true
+          expose:
+            operator_id: network_op
+            label: 'Network (e.g. eip155:5042)'
+            identifier: network
+        source:
+          id: source
+          table: search_api_index_listings
+          field: source
+          plugin_id: search_api_options
+          operator: or
+          value: {  }
+          exposed: true
+          expose:
+            operator_id: source_op
+            label: Seller
+            identifier: source
+            multiple: false
+            reduce: false
+      style:
+        type: default
+      row:
+        type: fields
+      query:
+        type: search_api_query
+        options:
+          skip_access: false
+      display_extenders: {  }
+  page_1:
+    id: page_1
+    display_title: Page
+    display_plugin: page
+    position: 1
+    display_options:
+      path: market
+      menu:
+        type: normal
+        title: Market
+        menu_name: main
+        weight: -10
+      display_extenders: {  }

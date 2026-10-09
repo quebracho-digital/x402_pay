@@ -1,0 +1,4 @@
+services:
+  x402_pay_market.circle_importer:
+    class: Drupal\x402_pay_market\CircleCatalogImporter
+    autowire: true

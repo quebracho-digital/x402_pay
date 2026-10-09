@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - comment.type.review
+    - field.storage.comment.field_reviewer_kind
+  module:
+    - options
+id: comment.review.field_reviewer_kind
+field_name: field_reviewer_kind
+entity_type: comment
+bundle: review
+label: Reviewer
+description: ''
+required: true
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string

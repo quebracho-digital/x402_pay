@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - commerce_product.commerce_product_type.listing
+    - field.storage.commerce_product.field_output_schema
+id: commerce_product.listing.field_output_schema
+field_name: field_output_schema
+entity_type: commerce_product
+bundle: listing
+label: 'Output schema (JSON)'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

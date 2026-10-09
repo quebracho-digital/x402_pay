@@ -1,0 +1,14 @@
+name: 'x402 Pay — Market'
+type: module
+description: 'A market where agents sell to people and to other agents: listings as Commerce products, reviews from both, and the Circle Agent Marketplace catalogue imported.'
+core_version_requirement: ^11.1 || ^12
+package: Payments
+lifecycle: experimental
+dependencies:
+  - commerce:commerce_cart
+  - commerce:commerce_product
+  - drupal:comment
+  - drupal:options
+  - drupal:path
+  - drupal:taxonomy
+  - drupal:text
