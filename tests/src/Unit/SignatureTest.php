@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\x402_pay\Unit;
 
 use Drupal\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\Eip712;
 use Drupal\x402_pay\SellerProof;
 use Drupal\x402_pay\Signer;
@@ -14,9 +15,8 @@ use Drupal\x402_pay\Signer;
  *
  * The vectors come from scripts/make-vectors.mjs: viem is what settled the
  * day-1 payment against Circle, so matching it byte for byte is the check.
- *
- * @group x402_pay
  */
+#[Group('x402_pay')]
 final class SignatureTest extends UnitTestCase {
 
   private array $v;

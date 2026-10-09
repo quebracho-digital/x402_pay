@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace Drupal\Tests\x402_pay\Unit;
 
 use Drupal\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\InvalidPaymentException;
 use Drupal\x402_pay\PaymentHeaders;
 
 /**
  * The x402 v2 HTTP headers: base64 (standard, padded) of a JSON object.
- *
- * @group x402_pay
  */
+#[Group('x402_pay')]
 final class PaymentHeadersTest extends UnitTestCase {
 
   /**
@@ -38,9 +39,7 @@ final class PaymentHeadersTest extends UnitTestCase {
     $this->assertSame('{"a":"??>"}', base64_decode($header));
   }
 
-  /**
-   * @dataProvider garbage
-   */
+  #[DataProvider('garbage')]
   public function testRejectsGarbage(string $header): void {
     $this->expectException(InvalidPaymentException::class);
     PaymentHeaders::decode($header);

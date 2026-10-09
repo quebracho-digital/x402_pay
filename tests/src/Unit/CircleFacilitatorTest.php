@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\x402_pay\Unit;
 
 use Drupal\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\CircleFacilitator;
 use Drupal\x402_pay\Eip712;
 use Drupal\x402_pay\FacilitatorException;
@@ -17,9 +18,8 @@ use GuzzleHttp\Psr7\Response;
 
 /**
  * Circle's Facilitator Service client, keyless (seller proof) mode.
- *
- * @group x402_pay
  */
+#[Group('x402_pay')]
 final class CircleFacilitatorTest extends UnitTestCase {
 
   private const BASE = 'https://api.circle.com/v1/facilitator/x402';

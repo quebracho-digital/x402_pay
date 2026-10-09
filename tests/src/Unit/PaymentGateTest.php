@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\x402_pay\Unit;
 
 use Drupal\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\CircleFacilitator;
 use Drupal\x402_pay\FacilitatorException;
 use Drupal\x402_pay\PaymentGate;
@@ -21,9 +23,8 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Order: verify the payment, run the handler, settle only on 2xx, and hand
  * the body over only once the money settled.
- *
- * @group x402_pay
  */
+#[Group('x402_pay')]
 final class PaymentGateTest extends UnitTestCase {
 
   private const PAY_TO = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
@@ -113,9 +114,7 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
-  /**
-   * @dataProvider mismatches
-   */
+  #[DataProvider('mismatches')]
   public function testPaymentForOtherTermsIs402WithoutAskingTheFacilitator(array $override): void {
     $this->facilitator->expects($this->never())->method('verify');
     $response = $this->handle($this->request($this->payment($override)));

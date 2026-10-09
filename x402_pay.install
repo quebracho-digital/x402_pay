@@ -1,0 +1,33 @@
+<?php
+
+/**
+ * @file
+ * Install hooks for x402 Pay.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function x402_pay_schema(): array {
+  $address = ['type' => 'varchar_ascii', 'length' => 64];
+  return [
+    'x402_pay_log' => [
+      'description' => 'Every paid request: what was bought, by whom, and what happened.',
+      'fields' => [
+        'id' => ['type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE],
+        'created' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+        'resource' => ['type' => 'varchar', 'length' => 2048, 'not null' => TRUE],
+        'network' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'amount' => ['type' => 'varchar_ascii', 'length' => 78, 'not null' => TRUE, 'description' => 'Atomic units, as the token counts them.'],
+        'pay_to' => $address + ['not null' => TRUE],
+        'payer' => $address,
+        'status' => ['type' => 'varchar_ascii', 'length' => 16, 'not null' => TRUE, 'description' => 'settled, not_settled or failed.'],
+        'transaction' => ['type' => 'varchar_ascii', 'length' => 128],
+        'handler_status' => ['type' => 'int', 'size' => 'small', 'not null' => TRUE],
+        'error' => ['type' => 'varchar', 'length' => 255],
+      ],
+      'primary key' => ['id'],
+      'indexes' => ['payer' => ['payer'], 'pay_to' => ['pay_to'], 'transaction' => ['transaction']],
+    ],
+  ];
+}

@@ -1,0 +1,10 @@
+services:
+  _defaults:
+    autowire: true
+  x402_pay.facilitator:
+    class: Drupal\x402_pay\CircleFacilitator
+  x402_pay.log:
+    class: Drupal\x402_pay\PaymentLog
+  x402_pay.gate:
+    class: Drupal\x402_pay\PaymentGate
+    arguments: ['@x402_pay.facilitator', '@x402_pay.log']
