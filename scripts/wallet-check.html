@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>x402 wallet check</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 44rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  button { font: inherit; padding: .5rem 1rem; margin: .25rem .25rem .25rem 0; cursor: pointer; }
+  textarea { width: 100%; height: 9rem; font: .8rem ui-monospace, monospace; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>x402 wallet check — Arc testnet</h1>
+<p>Day-1 check: can a browser wallet sign the same EIP-3009 payment the
+script settled? This page only <strong>signs</strong> (no gas, nothing moves).
+The script then settles it: <code>node --env-file=.env arc-pay-check.mjs &lt;payment&gt;</code>.</p>
+
+<button id="connect">1. Connect &amp; switch to Arc testnet</button>
+<button id="sign" disabled>2. Sign 0.01 USDC</button>
+<button id="copy" disabled>Copy payment</button>
+<pre id="out"></pre>
+<textarea id="payment" readonly placeholder="The PAYMENT-SIGNATURE value appears here"></textarea>
+
+<script>
+// Same constants as arc-pay-check.mjs. payTo is the script's seller wallet.
+const CHAIN_ID = 5042002;
+const USDC = "0x3600000000000000000000000000000000000000";
+const PAY_TO = "0x7e510E6B4c3E2121CB64CD0686a4f241Df326510";
+const AMOUNT = "10000"; // 0.01 USDC, 6 decimals
+const $ = (id) => document.getElementById(id);
+const log = (m) => { $("out").textContent += m + "\n"; };
+let account;
+
+$("connect").onclick = async () => {
+  try {
+    if (!window.ethereum) throw new Error("No wallet found (install MetaMask).");
+    [account] = await ethereum.request({ method: "eth_requestAccounts" });
+    const chainId = "0x" + CHAIN_ID.toString(16);
+    try {
+      await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+    } catch (e) {
+      if (e.code !== 4902) throw e;
+      await ethereum.request({ method: "wallet_addEthereumChain", params: [{
+        chainId, chainName: "Arc Testnet",
+        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+        rpcUrls: ["https://rpc.testnet.arc.network"],
+        blockExplorerUrls: ["https://testnet.arcscan.app"],
+      }] });
+    }
+    const data = "0x70a08231" + account.slice(2).toLowerCase().padStart(64, "0");
+    const bal = BigInt(await ethereum.request({ method: "eth_call", params: [{ to: USDC, data }, "latest"] }));
+    log(`account ${account}\nUSDC ${Number(bal) / 1e6}`);
+    if (bal < BigInt(AMOUNT)) log("Not enough USDC: get some at https://faucet.circle.com (Arc Testnet).");
+    $("sign").disabled = false;
+  } catch (e) { log("✗ " + (e.message || e)); }
+};
+
+$("sign").onclick = async () => {
+  try {
+    const nonce = "0x" + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, "0")).join("");
+    const authorization = {
+      from: account, to: PAY_TO, value: AMOUNT, validAfter: "0",
+      validBefore: String(Math.floor(Date.now() / 1000) + 3600), nonce,
+    };
+    const typed = {
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" }, { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" },
+        ],
+        TransferWithAuthorization: [
+          { name: "from", type: "address" }, { name: "to", type: "address" }, { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" }, { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" },
+        ],
+      },
+      primaryType: "TransferWithAuthorization",
+      domain: { name: "USDC", version: "2", chainId: CHAIN_ID, verifyingContract: USDC },
+      message: authorization,
+    };
+    const signature = await ethereum.request({ method: "eth_signTypedData_v4", params: [account, JSON.stringify(typed)] });
+    const accepted = {
+      scheme: "exact", network: `eip155:${CHAIN_ID}`, amount: AMOUNT, asset: USDC, payTo: PAY_TO,
+      maxTimeoutSeconds: 3600, extra: { name: "USDC", version: "2" },
+    };
+    const payment = {
+      x402Version: 2,
+      resource: { url: "https://example.invalid/wallet-check", description: "x402_pay wallet check", mimeType: "application/json" },
+      accepted, payload: { signature, authorization },
+    };
+    $("payment").value = btoa(JSON.stringify(payment));
+    $("copy").disabled = false;
+    log("✓ signed. Copy the payment and settle it with the script.");
+  } catch (e) { log("✗ " + (e.message || e)); }
+};
+
+$("copy").onclick = () => navigator.clipboard.writeText($("payment").value).then(() => log("copied"));
+</script>
+</body>
+</html>

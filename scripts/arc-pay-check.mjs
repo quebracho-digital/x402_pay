@@ -1,6 +1,8 @@
 // Day-1 check: a buyer pays a seller 0.01 USDC on Arc testnet through
 // Circle's Facilitator Service (keyless trial), and we read the tx back.
-// Run: node --env-file-if-exists=.env arc-pay-check.mjs
+// Run: node --env-file-if-exists=.env arc-pay-check.mjs [payment]
+// With [payment] (a PAYMENT-SIGNATURE value, e.g. from wallet-check.html),
+// it settles that payment instead of signing one with the buyer key.
 // First run writes .env with two fresh testnet keys; fund the buyer at
 // https://faucet.circle.com (Arc Testnet, USDC) and run again.
 import { appendFileSync } from "node:fs";
@@ -32,18 +34,21 @@ const arc = defineChain({
 const rpc = createPublicClient({ chain: arc, transport: http() });
 const balanceOf = (a) => rpc.readContract({ address: USDC, abi: parseAbi(["function balanceOf(address) view returns (uint256)"]), functionName: "balanceOf", args: [a] });
 
-const before = { buyer: await balanceOf(buyer.address), seller: await balanceOf(payTo) };
-console.log(`buyer ${buyer.address} ${formatUnits(before.buyer, 6)} USDC · seller ${payTo} ${formatUnits(before.seller, 6)} USDC`);
+const external = process.argv[2] ? JSON.parse(Buffer.from(process.argv[2], "base64").toString()) : null;
+const payer = external?.payload.authorization.from ?? buyer.address;
+const before = { buyer: await balanceOf(payer), seller: await balanceOf(payTo) };
+console.log(`buyer ${payer} ${formatUnits(before.buyer, 6)} USDC · seller ${payTo} ${formatUnits(before.seller, 6)} USDC`);
 if (before.buyer < AMOUNT) throw new Error("Buyer has no USDC: fund it at https://faucet.circle.com");
 
 const nonce32 = () => toHex(crypto.getRandomValues(new Uint8Array(32)));
 
-// 1. Buyer signs the EIP-3009 authorization (what an x402 client sends).
-const authorization = {
+// 1. Buyer signs the EIP-3009 authorization (what an x402 client sends),
+// unless the payment was signed elsewhere (a browser wallet).
+const authorization = external?.payload.authorization ?? {
   from: buyer.address, to: payTo, value: AMOUNT,
   validAfter: 0n, validBefore: BigInt(Math.floor(Date.now() / 1000) + 3600), nonce: nonce32(),
 };
-const signature = await buyer.signTypedData({
+const signature = external?.payload.signature ?? await buyer.signTypedData({
   domain: { name: "USDC", version: "2", chainId: CHAIN_ID, verifyingContract: USDC },
   types: { TransferWithAuthorization: [
     { name: "from", type: "address" }, { name: "to", type: "address" }, { name: "value", type: "uint256" },
@@ -105,6 +110,6 @@ for (let i = 0; !out.success && paymentId && i < 20; i++) {
 }
 if (!out.success) process.exit(1);
 
-const after = { buyer: await balanceOf(buyer.address), seller: await balanceOf(payTo) };
+const after = { buyer: await balanceOf(payer), seller: await balanceOf(payTo) };
 console.log(`tx https://testnet.arcscan.app/tx/${out.transaction}`);
 console.log(`buyer ${formatUnits(after.buyer - before.buyer, 6)} · seller +${formatUnits(after.seller - before.seller, 6)} USDC`);
