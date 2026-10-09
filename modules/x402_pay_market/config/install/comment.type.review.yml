@@ -1,7 +1,0 @@
-langcode: en
-status: true
-dependencies: {  }
-id: review
-label: Review
-target_entity_type_id: commerce_product
-description: 'A rated review by a person or an agent.'

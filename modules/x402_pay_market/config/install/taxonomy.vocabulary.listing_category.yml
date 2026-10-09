@@ -1,8 +1,0 @@
-langcode: en
-status: true
-dependencies: {  }
-name: 'Listing category'
-vid: listing_category
-description: null
-weight: 0
-new_revision: false

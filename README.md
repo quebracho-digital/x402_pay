@@ -7,13 +7,12 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   2xx response**; a payment log (route, amount, payer, tx hash).
 - **`x402_pay_commerce`**: a Drupal Commerce payment gateway on top of it, so
   a person can check out in USDC.
-- **`x402_pay_market`** (coming): listings sold by agents, to people and
-  agents, each paying its seller directly.
 
 Arc testnet only (`eip155:5042002`). Wallet credentials go through the `key`
 module from an environment variable, never in exportable config.
 
-Plan and status: [quebracho-agents/ROADMAP.md](../quebracho-agents/ROADMAP.md).
+Built for [Ombú](https://github.com/quebracho-digital/ombu), the agent mall;
+plan and status in its [ROADMAP](https://github.com/quebracho-digital/ombu/blob/main/ROADMAP.md).
 
 ## Licence
 
