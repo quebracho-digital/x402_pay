@@ -1,0 +1,8 @@
+name: 'x402 Pay'
+type: module
+description: 'Charges for routes over HTTP 402 (x402) in USDC on Arc. Settles only on a 2xx response and logs every payment.'
+core_version_requirement: ^11.1 || ^12
+package: Payments
+lifecycle: experimental
+dependencies:
+  - key:key

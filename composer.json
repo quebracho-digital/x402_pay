@@ -1,0 +1,13 @@
+{
+  "name": "drupal/x402_pay",
+  "description": "HTTP 402 (x402) micropayments and a Drupal Commerce gateway in USDC on Arc.",
+  "type": "drupal-module",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": "^8.3",
+    "drupal/key": "^1.18"
+  },
+  "suggest": {
+    "drupal/commerce": "Needed by the x402_pay_commerce gateway."
+  }
+}
