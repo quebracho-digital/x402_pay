@@ -1,0 +1,62 @@
+{
+  "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+  "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "body": "{\"x402Version\":2,\"hello\":\"ombú\"}",
+  "bodyHash": "0x6efce10c5f9c5dd4327c767cf753cc9e19840974f5c6d9d016392578c8bd7d5f",
+  "sellerRequest": {
+    "domain": {
+      "name": "Circle Facilitator Seller Request",
+      "version": "1",
+      "chainId": 5042002
+    },
+    "types": {
+      "SellerRequest": [
+        {
+          "name": "purpose",
+          "type": "string"
+        },
+        {
+          "name": "method",
+          "type": "string"
+        },
+        {
+          "name": "bodyHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "network",
+          "type": "string"
+        },
+        {
+          "name": "payTo",
+          "type": "address"
+        },
+        {
+          "name": "nonce",
+          "type": "bytes32"
+        },
+        {
+          "name": "issuedAt",
+          "type": "uint64"
+        },
+        {
+          "name": "expiresAt",
+          "type": "uint64"
+        }
+      ]
+    },
+    "message": {
+      "purpose": "settle",
+      "method": "POST",
+      "bodyHash": "0x6efce10c5f9c5dd4327c767cf753cc9e19840974f5c6d9d016392578c8bd7d5f",
+      "network": "eip155:5042002",
+      "payTo": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "nonce": "0xabababababababababababababababababababababababababababababababab",
+      "issuedAt": 1760000000,
+      "expiresAt": 1760000300
+    },
+    "digest": "0x06f811c69f548c205fdb69273bacff91921a974a4e374966444af01cc2af4135",
+    "signature": "0x0e8178d0ff224ff06415f6e6330927453e3b46cffaa75528e02a6a6b8b9afd881736b2d4e8e5365e0878cabc21bb4613c8fa534618d7ff102dcdbcfa2c70525f1b",
+    "header": "eyJ2ZXJzaW9uIjoxLCJzaWduYXR1cmUiOiIweDBlODE3OGQwZmYyMjRmZjA2NDE1ZjZlNjMzMDkyNzQ1M2UzYjQ2Y2ZmYWE3NTUyOGUwMmE2YTZiOGI5YWZkODgxNzM2YjJkNGU4ZTUzNjVlMDg3OGNhYmMyMWJiNDYxM2M4ZmE1MzQ2MThkN2ZmMTAyZGNkYmNmYTJjNzA1MjVmMWIiLCJuZXR3b3JrIjoiZWlwMTU1OjUwNDIwMDIiLCJwYXlUbyI6IjB4ZjM5RmQ2ZTUxYWFkODhGNkY0Y2U2YUI4ODI3Mjc5Y2ZmRmI5MjI2NiIsIm5vbmNlIjoiMHhhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiIiwiaXNzdWVkQXQiOjE3NjAwMDAwMDAsImV4cGlyZXNBdCI6MTc2MDAwMDMwMH0"
+  }
+}
