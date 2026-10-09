@@ -2,7 +2,7 @@
 
 Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 
-- **`x402_pay`**: price per route; unpaid requests get a 402 with the payment
+- **`x402_pay`**: the caller sets price and `payTo` per request; unpaid requests get a 402 with the payment
   requirements; verify and settle through Circle's facilitator **only on a
   2xx response**; a payment log (route, amount, payer, tx hash).
 - **`x402_pay_commerce`**: a Drupal Commerce payment gateway on top of it, so
