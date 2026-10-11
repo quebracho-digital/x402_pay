@@ -9,3 +9,11 @@ x402_pay.entity:
         type: 'entity:{entity_type}'
   requirements:
     _entity_access: 'entity.view'
+
+x402_pay.discovery:
+  path: '/x402/discovery'
+  defaults:
+    _controller: '\Drupal\x402_pay\Controller\DiscoveryController'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'

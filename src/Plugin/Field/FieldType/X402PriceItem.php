@@ -139,6 +139,13 @@ class X402PriceItem extends FieldItemBase {
     return (string) $this->getSetting('view_mode');
   }
 
+  /**
+   * Whether this field charges on the entity's own URL.
+   */
+  public function isCanonical(): bool {
+    return (bool) $this->getSetting('canonical');
+  }
+
   public function isPayable(): bool {
     return $this->getSetting('enabled') && $this->enabled;
   }

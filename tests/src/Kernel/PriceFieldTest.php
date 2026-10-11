@@ -261,6 +261,53 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
   }
 
+  public function testTheDiscoveryListsEveryProductLikeCircles(): void {
+    $this->addField('entity_test', 'field_summary', ['amount' => '0.002', 'view_mode' => 'teaser', 'canonical' => FALSE]);
+    EntityTest::load(1)->set('field_summary', ['enabled' => 1])->save();
+    EntityTest::create(['name' => 'Free one', 'field_price' => ['enabled' => 0]])->save();
+
+    $discovery = $this->discovery();
+    $this->assertSame(2, $discovery['x402Version']);
+    $this->assertSame(2, $discovery['pagination']['total'], 'Two products of one entity; the free entity sells nothing.');
+    $byResource = array_column($discovery['items'], NULL, 'resource');
+    $canonical = $byResource[array_key_first(array_filter($byResource, fn($r) => str_ends_with($r, '/entity_test/1'), ARRAY_FILTER_USE_KEY))];
+    $this->assertSame('http', $canonical['type']);
+    $this->assertSame('10000', $canonical['accepts'][0]['amount']);
+    $this->assertSame(self::PAY_TO, $canonical['accepts'][0]['payTo']);
+    $this->assertSame('Terms of X', $canonical['metadata']['description']);
+    $this->assertSame('GET', $canonical['metadata']['method']);
+    $this->assertSame('text/markdown', $canonical['metadata']['mimeType']);
+    $summary = array_values(array_filter($discovery['items'], fn($i) => str_ends_with($i['resource'], '/x402/entity_test/1/teaser')));
+    $this->assertSame('2000', $summary[0]['accepts'][0]['amount']);
+  }
+
+  public function testTheDiscoveryPaginates(): void {
+    EntityTest::create(['name' => 'Second', 'field_price' => ['enabled' => 1]])->save();
+    $page = $this->discovery('?limit=1&offset=1');
+    $this->assertCount(1, $page['items']);
+    $this->assertSame(['limit' => 1, 'offset' => 1, 'total' => 2], $page['pagination']);
+  }
+
+  public function testTheDiscoveryListsNothingThatCannotBeSeen(): void {
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->revokePermission('view test entity')->save();
+    $this->assertSame([], $this->discovery()['items']);
+  }
+
+  public function testTheDiscoveryForgetsAFieldTurnedOff(): void {
+    $this->field->setSetting('enabled', FALSE)->save();
+    $this->assertSame(0, $this->discovery()['pagination']['total']);
+  }
+
+  /**
+   * GET /x402/discovery, decoded.
+   */
+  private function discovery(string $query = ''): array {
+    $response = $this->get('/x402/discovery' . $query);
+    $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+    $this->assertStringStartsWith('application/json', $response->headers->get('Content-Type'));
+    return json_decode($response->getContent(), TRUE);
+  }
+
   /**
    * Adds an x402_price field with the test seller key.
    */

@@ -24,6 +24,13 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   - **What they get:** the fields of that view mode as markdown, under the
     label. Not the entity's template, nor the fields a display cannot
     configure (a node's author and date), nor the price.
+- **`/x402/discovery`**: everything the site sells, one item per product,
+  in the shape of Circle's Discovery API, so a client written for Circle's
+  Agent Marketplace reads it unchanged. Every entity type with the field;
+  `limit` and `offset`; cached until an entity or a field changes. List
+  prices: the price event may charge otherwise at the time of sale. For
+  people, build a View: the field gives Views a *Charge for this* filter
+  and the price formatter.
 - **The price event** (`Drupal\x402_pay\Event\PriceEvent`): before every
   sale, with the entity in the request's language, the view mode, the
   request and the account. A subscriber can change the price, make it free
