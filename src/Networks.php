@@ -22,7 +22,9 @@ final class Networks {
   ];
 
   /**
-   * How long the buyer's signed payment stays valid, in seconds.
+   * How long the buyer's signed payment stays valid, in seconds, by default.
+   *
+   * It must outlive the delivery: settling happens after it.
    */
   public const TIMEOUT = 60;
 
@@ -32,7 +34,7 @@ final class Networks {
    * @throws \InvalidArgumentException
    *   Unknown network, or a price the token cannot represent.
    */
-  public static function requirements(string $network, string $usd, string $payTo): array {
+  public static function requirements(string $network, string $usd, string $payTo, int $timeout = self::TIMEOUT): array {
     $token = self::ALL[$network] ?? throw new \InvalidArgumentException("Unsupported network: $network.");
     return [
       'scheme' => 'exact',
@@ -40,7 +42,7 @@ final class Networks {
       'amount' => self::atomic($usd, $token['decimals']),
       'asset' => $token['asset'],
       'payTo' => $payTo,
-      'maxTimeoutSeconds' => self::TIMEOUT,
+      'maxTimeoutSeconds' => $timeout,
       'extra' => $token['extra'],
     ];
   }

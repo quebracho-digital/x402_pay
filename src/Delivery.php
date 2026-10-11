@@ -84,7 +84,7 @@ class Delivery {
    */
   public function requirements(PriceEvent $quote, X402PriceItem $item): array {
     $seller = $quote->seller() ?? $item->seller();
-    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $seller->address());
+    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $seller->address(), $quote->timeout());
   }
 
   /**

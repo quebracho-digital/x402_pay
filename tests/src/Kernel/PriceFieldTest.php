@@ -231,6 +231,14 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('application/json', $required['resource']['mimeType']);
   }
 
+  public function testASlowProductGivesTheBuyerMoreTimeToPay(): void {
+    // The buyer's signature must outlive the delivery, or the settlement
+    // fails after the seller did the work.
+    $this->listen(fn(PriceEvent $e) => $e->setTimeout(600));
+    $this->assertSame(600, $this->required('/x402/entity_test/1')['accepts'][0]['maxTimeoutSeconds']);
+    $this->assertSame(600, $this->discovery()['items'][0]['accepts'][0]['maxTimeoutSeconds']);
+  }
+
   public function testTheDeliveryEventReplacesWhatIsDelivered(): void {
     $this->mockFacilitator();
     $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, function (DeliveryEvent $e) {
@@ -338,6 +346,13 @@ final class PriceFieldTest extends KernelTestBase {
 
   public function testTheDiscoveryLeavesOutWhatIsDenied(): void {
     $this->listen(fn(PriceEvent $e) => $e->deny());
+    $this->assertSame(0, $this->discovery()['pagination']['total']);
+  }
+
+  public function testTheDiscoveryLeavesOutWhatCannotBeSold(): void {
+    // A product without a usable seller key cannot be paid for: listing it
+    // would only send agents to a 503; failing the whole catalogue is worse.
+    $this->field->setSetting('key_id', 'missing')->save();
     $this->assertSame(0, $this->discovery()['pagination']['total']);
   }
 

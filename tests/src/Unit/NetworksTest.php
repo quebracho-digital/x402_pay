@@ -61,6 +61,10 @@ final class NetworksTest extends UnitTestCase {
     ], Networks::requirements('eip155:5042002', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'));
   }
 
+  public function testTheTimeoutCanBeLonger(): void {
+    $this->assertSame(600, Networks::requirements('eip155:5042002', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 600)['maxTimeoutSeconds']);
+  }
+
   public function testRefusesAnUnknownNetwork(): void {
     $this->expectException(\InvalidArgumentException::class);
     Networks::requirements('eip155:1', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');

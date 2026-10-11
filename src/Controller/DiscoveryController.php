@@ -67,8 +67,14 @@ final class DiscoveryController implements ContainerInjectionInterface {
         if ($access->isAllowed()) {
           foreach (X402PriceItem::all($entity) as $item) {
             $quote = $this->delivery->quote($request, $entity, $item);
-            if (!$quote->isDenied()) {
-              $items[] = $this->item($entity, $item, $quote);
+            try {
+              if (!$quote->isDenied()) {
+                $items[] = $this->item($entity, $item, $quote);
+              }
+            }
+            catch (\RuntimeException | \InvalidArgumentException) {
+              // Cannot be sold (no usable seller key, a price the network
+              // cannot charge): the sale logs why, the catalogue skips it.
             }
           }
         }

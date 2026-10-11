@@ -27,7 +27,8 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 - **`/x402/discovery`**: everything the site sells, one item per product,
   in the shape of Circle's Discovery API, so a client written for Circle's
   Agent Marketplace reads it unchanged. Every entity type with the field;
-  `limit` and `offset`; cached until an entity or a field changes. List
+  `limit` and `offset`; cached until an entity or a field changes. What
+  cannot be sold (no usable seller key) is left out, not an error. List
   prices: the price event may charge otherwise at the time of sale. For
   people, build a View: the field gives Views a *Charge for this* filter
   and the price formatter.
@@ -35,7 +36,9 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   sale, with the entity in the request's language, the view mode, the
   request and the account. A subscriber can change the price, make it free
   or deny it, choose the seller (one wallet per entity, e.g. per listing of
-  a market) and say what the buyer gets (`mimeType`). It starts at the
+  a market) and say what the buyer gets (`mimeType`) and how long the payment stays
+  valid (`setTimeout()`: a slow delivery needs more than the default 60 s,
+  since settling comes after it). It starts at the
   field's price, free for those with *Access x402 content free*. The
   catalogue asks the same question, so it announces what the sale will
   charge, and to whom. ECA support (`x402_pay_eca`) comes later.

@@ -7,6 +7,7 @@ namespace Drupal\x402_pay\Event;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
+use Drupal\x402_pay\Networks;
 use Drupal\x402_pay\Signer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\EventDispatcher\Event;
@@ -27,6 +28,8 @@ final class PriceEvent extends Event {
   private ?Signer $seller = NULL;
 
   private string $mimeType = 'text/markdown';
+
+  private int $timeout = Networks::TIMEOUT;
 
   public function __construct(
     public readonly FieldableEntityInterface $entity,
@@ -90,6 +93,21 @@ final class PriceEvent extends Event {
 
   public function mimeType(): string {
     return $this->mimeType;
+  }
+
+  /**
+   * How long the buyer's payment stays valid, in seconds.
+   *
+   * Settling happens after the delivery, so a slow product (a model reading
+   * a long document) needs more than the default, or the buyer's signature
+   * expires while the seller works and the sale fails.
+   */
+  public function setTimeout(int $seconds): void {
+    $this->timeout = $seconds;
+  }
+
+  public function timeout(): int {
+    return $this->timeout;
   }
 
 }
