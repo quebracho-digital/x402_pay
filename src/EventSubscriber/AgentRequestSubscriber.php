@@ -38,37 +38,43 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
   }
 
   public function onRequest(RequestEvent $event): void {
-    $entity = $event->isMainRequest() ? $this->paidEntity($event->getRequest()) : NULL;
-    if ($entity && $this->isAgent($event->getRequest())) {
-      $event->setResponse($this->delivery->charge($event->getRequest(), $entity, X402PriceItem::find($entity)));
+    $entity = $event->isMainRequest() ? $this->entity($event->getRequest()) : NULL;
+    $item = $entity ? X402PriceItem::find($entity) : NULL;
+    if ($item && $this->isAgent($event->getRequest())) {
+      $event->setResponse($this->delivery->charge($event->getRequest(), $entity, $item, TRUE));
     }
   }
 
   /**
-   * The page people see: announce the paid route, keep it out of page cache.
+   * The page people see: announce what is sold, keep it out of page cache.
    *
    * The page cache answers by URL alone, so a cached page would reach an
    * agent before it could be charged. Done here and not in a view hook: the
    * render cache skips view hooks on its hits.
    */
   public function onResponse(ResponseEvent $event): void {
-    $entity = $event->isMainRequest() ? $this->paidEntity($event->getRequest()) : NULL;
-    if ($entity && $event->getResponse()->isSuccessful()) {
-      $this->pageCacheKillSwitch->trigger();
-      $paid = Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id()])->toString(TRUE)->getGeneratedUrl();
-      $event->getResponse()->headers->set('Link', "<$paid>; rel=\"alternate\"; type=\"text/markdown\"", FALSE);
+    $entity = $event->isMainRequest() ? $this->entity($event->getRequest()) : NULL;
+    $items = $entity ? X402PriceItem::all($entity) : [];
+    if (!$items || !$event->getResponse()->isSuccessful()) {
+      return;
+    }
+    $this->pageCacheKillSwitch->trigger();
+    foreach ($items as $item) {
+      $mode = $item->viewMode();
+      $paid = Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id(), 'view_mode' => $mode])->toString(TRUE)->getGeneratedUrl();
+      $event->getResponse()->headers->set('Link', "<$paid>; rel=\"alternate\"; type=\"text/markdown\"; title=\"$mode\"", FALSE);
     }
   }
 
   /**
-   * The payable entity of a canonical route, if that is the request.
+   * The entity of a canonical route, if that is the request.
    */
-  private function paidEntity(Request $request): ?FieldableEntityInterface {
+  private function entity(Request $request): ?FieldableEntityInterface {
     if (!preg_match('/^entity\.(\w+)\.canonical$/', (string) $request->attributes->get('_route'), $m)) {
       return NULL;
     }
     $entity = $request->attributes->get($m[1]);
-    return $entity instanceof FieldableEntityInterface && X402PriceItem::find($entity) ? $entity : NULL;
+    return $entity instanceof FieldableEntityInterface ? $entity : NULL;
   }
 
   /**

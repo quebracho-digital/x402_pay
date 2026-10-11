@@ -7,6 +7,7 @@ namespace Drupal\x402_pay\Plugin\Field\FieldType;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\Attribute\FieldType;
+use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemBase;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -18,10 +19,13 @@ use Drupal\x402_pay\Signer;
 /**
  * Makes any fieldable entity payable over x402 by adding the field.
  *
- * The field's settings hold the price, the network and the seller key; the
- * money goes to the key's own address, so it cannot go to a wallet that
- * does not sign. Each entity can switch charging off and, when the field
- * allows it, set its own price.
+ * Each field is one product: a view mode at a price. Its settings hold the
+ * price, the network and the seller key; the money goes to the key's own
+ * address, so it cannot go to a wallet that does not sign. Each entity can
+ * switch charging off and, when the field allows it, set its own price; a
+ * translatable field gives each translation its own. A bundle can have
+ * several fields, each with its own view mode, and at most one of them
+ * charges on the entity's own URL.
  *
  * @property bool|null $enabled
  * @property string|null $amount
@@ -43,6 +47,8 @@ class X402PriceItem extends FieldItemBase {
       'network' => array_key_first(Networks::ALL),
       'key_id' => '',
       'allow_override' => FALSE,
+      'view_mode' => 'full',
+      'canonical' => TRUE,
     ] + parent::defaultFieldSettings();
   }
 
@@ -72,21 +78,65 @@ class X402PriceItem extends FieldItemBase {
   }
 
   /**
-   * The entity's payable price item, or NULL when it is free.
+   * The payable item that sells a view mode of the entity, if any.
+   *
+   * @param string|null $viewMode
+   *   NULL: the one sold on the entity's own URL.
    */
-  public static function find(EntityInterface $entity): ?self {
-    if (!$entity instanceof FieldableEntityInterface) {
-      return NULL;
-    }
-    foreach ($entity->getFieldDefinitions() as $name => $definition) {
-      if ($definition->getType() === 'x402_price') {
-        $item = $entity->get($name)->first();
-        if ($item instanceof self && $item->isPayable()) {
-          return $item;
-        }
+  public static function find(EntityInterface $entity, ?string $viewMode = NULL): ?self {
+    foreach (self::all($entity) as $item) {
+      if ($viewMode === NULL ? $item->getSetting('canonical') : $item->getSetting('view_mode') === $viewMode) {
+        return $item;
       }
     }
     return NULL;
+  }
+
+  /**
+   * Every payable item of the entity: everything it sells right now.
+   *
+   * @return self[]
+   */
+  public static function all(EntityInterface $entity): array {
+    $items = [];
+    if ($entity instanceof FieldableEntityInterface) {
+      foreach ($entity->getFieldDefinitions() as $name => $definition) {
+        $item = $definition->getType() === 'x402_price' ? $entity->get($name)->first() : NULL;
+        if ($item instanceof self && $item->isPayable()) {
+          $items[] = $item;
+        }
+      }
+    }
+    return $items;
+  }
+
+  /**
+   * Why this field cannot sit next to the others on its bundle, if it can't.
+   *
+   * Two fields selling the same view mode would be one thing at two prices;
+   * two on the canonical URL, two prices for one URL.
+   */
+  public static function conflict(FieldDefinitionInterface $field): ?TranslatableMarkup {
+    $others = \Drupal::service('entity_field.manager')->getFieldDefinitions($field->getTargetEntityTypeId(), $field->getTargetBundle());
+    foreach ($others as $other) {
+      if ($other->getType() !== 'x402_price' || $other->getName() === $field->getName()) {
+        continue;
+      }
+      if ($other->getSetting('view_mode') === $field->getSetting('view_mode')) {
+        return t('The field %other already sells the %mode view mode.', ['%other' => $other->getLabel(), '%mode' => $field->getSetting('view_mode')]);
+      }
+      if ($other->getSetting('canonical') && $field->getSetting('canonical')) {
+        return t("The field %other already charges on the entity's own URL.", ['%other' => $other->getLabel()]);
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * The view mode this field sells.
+   */
+  public function viewMode(): string {
+    return (string) $this->getSetting('view_mode');
   }
 
   public function isPayable(): bool {
@@ -122,9 +172,12 @@ class X402PriceItem extends FieldItemBase {
 
   /**
    * What the buyer must pay, as one x402 PaymentRequirements.
+   *
+   * @param string|null $usd
+   *   The price to charge, e.g. after the price event; the field's when NULL.
    */
-  public function requirements(): array {
-    return Networks::requirements((string) $this->getSetting('network'), $this->price(), $this->seller()->address());
+  public function requirements(?string $usd = NULL): array {
+    return Networks::requirements((string) $this->getSetting('network'), $usd ?? $this->price(), $this->seller()->address());
   }
 
   public function fieldSettingsForm(array $form, FormStateInterface $form_state): array {
@@ -161,7 +214,23 @@ class X402PriceItem extends FieldItemBase {
       'allow_override' => [
         '#type' => 'checkbox',
         '#title' => $this->t('Each entity can set its own price'),
+        '#description' => $this->t('Make the field translatable to price each translation on its own.'),
         '#default_value' => $this->getSetting('allow_override'),
+      ],
+      'view_mode' => [
+        '#type' => 'select',
+        '#title' => $this->t('What is sold'),
+        '#description' => $this->t('The view mode delivered as markdown. Only its fields are sent, never the page around them.'),
+        '#options' => \Drupal::service('entity_display.repository')->getViewModeOptions($this->getFieldDefinition()->getTargetEntityTypeId()) + ['full' => $this->t('Full content')],
+        '#default_value' => $this->getSetting('view_mode'),
+        '#required' => TRUE,
+        '#element_validate' => [[static::class, 'validateConflict']],
+      ],
+      'canonical' => [
+        '#type' => 'checkbox',
+        '#title' => $this->t("Charge agents on the entity's own URL"),
+        '#description' => $this->t('Browsers still see the page there. Every field is also sold at /x402/{entity type}/{id}/{view mode}.'),
+        '#default_value' => $this->getSetting('canonical'),
       ],
     ];
   }
@@ -173,6 +242,15 @@ class X402PriceItem extends FieldItemBase {
     }
     catch (\InvalidArgumentException) {
       $form_state->setError($element, t('A price above zero, with a dot and at most @n decimals.', ['@n' => $network['decimals']]));
+    }
+  }
+
+  public static function validateConflict(array $element, FormStateInterface $form_state): void {
+    $field = clone $form_state->getFormObject()->getEntity();
+    $field->setSetting('view_mode', $form_state->getValue(['settings', 'view_mode']));
+    $field->setSetting('canonical', (bool) $form_state->getValue(['settings', 'canonical']));
+    if ($conflict = static::conflict($field)) {
+      $form_state->setError($element, $conflict);
     }
   }
 

@@ -13,7 +13,7 @@ services:
     arguments: ['@x402_pay.facilitator', '@x402_pay.log']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
-    arguments: ['@x402_pay.gate', '@entity_type.manager', '@renderer', '@logger.channel.x402_pay']
+    arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']
   x402_pay.agent_request_subscriber:
     class: Drupal\x402_pay\EventSubscriber\AgentRequestSubscriber
     arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch']

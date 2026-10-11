@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\x402_pay\Kernel;
 
+use Drupal\Core\Entity\Entity\EntityViewMode;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\entity_test\Entity\EntityTestMul;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\key\Entity\Key;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\user\Entity\Role;
 use Drupal\x402_pay\CircleFacilitator;
+use Drupal\x402_pay\Event\PriceEvent;
 use Drupal\x402_pay\PaymentHeaders;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Signer;
@@ -24,8 +28,9 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * The x402_price field: any entity with it is sold to agents over x402.
  *
- * Agents are charged on the separate route and on the canonical URL;
- * browsers still see the page there.
+ * Each field sells one view mode at one price. At most one of them charges
+ * on the entity's own URL, where browsers still see the page; every one is
+ * sold at /x402/{entity_type}/{id}/{view_mode}.
  */
 #[Group('x402_pay')]
 #[RunTestsInSeparateProcesses]
@@ -51,7 +56,6 @@ final class PriceFieldTest extends KernelTestBase {
     Role::create(['id' => AccountInterface::ANONYMOUS_ROLE, 'label' => 'Anonymous'])
       ->grantPermission('view test entity')
       ->save();
-
     Key::create([
       'id' => 'seller',
       'label' => 'Seller',
@@ -59,21 +63,13 @@ final class PriceFieldTest extends KernelTestBase {
       'key_provider' => 'config',
       'key_provider_settings' => ['key_value' => self::KEY],
     ])->save();
-    FieldStorageConfig::create(['field_name' => 'field_price', 'entity_type' => 'entity_test', 'type' => 'x402_price'])->save();
-    $this->field = FieldConfig::create([
-      'field_name' => 'field_price',
-      'entity_type' => 'entity_test',
-      'bundle' => 'entity_test',
-      'settings' => [
-        'enabled' => TRUE,
-        'amount' => '0.01',
-        'network' => 'eip155:5042002',
-        'key_id' => 'seller',
-        'allow_override' => FALSE,
-      ],
-    ]);
-    $this->field->save();
 
+    $this->field = $this->addField('entity_test', 'field_price', ['amount' => '0.01', 'view_mode' => 'full', 'canonical' => TRUE]);
+    // The price itself is never part of what is sold.
+    EntityViewMode::create(['id' => 'entity_test.full', 'label' => 'Full', 'targetEntityType' => 'entity_test'])->save();
+    \Drupal::service('entity_display.repository')->getViewDisplay('entity_test', 'entity_test', 'full')
+      ->setComponent('field_price', ['type' => 'x402_price_default'])
+      ->save();
     $this->entity = EntityTest::create(['name' => 'Terms of X', 'field_price' => ['enabled' => 1, 'amount' => '5']]);
     $this->entity->save();
   }
@@ -127,32 +123,190 @@ final class PriceFieldTest extends KernelTestBase {
   public function testABrowserStillSeesThePage(): void {
     $response = $this->get('/entity_test/1', ['Accept' => 'text/html,application/xhtml+xml', 'User-Agent' => 'Mozilla/5.0 Firefox/140.0']);
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertStringContainsString('</x402/entity_test/1>', (string) $response->headers->get('Link'));
+    $this->assertStringContainsString('</x402/entity_test/1/full>', (string) $response->headers->get('Link'));
   }
 
   public function testAPaidRequestGetsMarkdownAndIsLogged(): void {
-    $facilitator = $this->createMock(CircleFacilitator::class);
-    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
-    $facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
-    $this->container->set('x402_pay.facilitator', $facilitator);
-
+    $this->mockFacilitator();
     $accepted = X402PriceItem::find($this->entity)->requirements();
-    $header = PaymentHeaders::encode(['x402Version' => 2, 'accepted' => $accepted, 'payload' => []]);
-    $response = $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $header]);
+    $response = $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($accepted)]);
 
     $this->assertSame(200, $response->getStatusCode(), $response->getContent());
     $this->assertStringStartsWith('text/markdown', $response->headers->get('Content-Type'));
     $this->assertStringStartsWith("# Terms of X\n", $response->getContent());
+    $this->assertStringNotContainsString('USD 0.01', $response->getContent(), 'The price is not part of what is sold.');
     $this->assertSame(self::TX, PaymentHeaders::decode($response->headers->get(PaymentHeaders::RESPONSE))['transaction']);
     $row = \Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc();
     $this->assertSame('settled', $row['status']);
     $this->assertSame(self::PAY_TO, $row['pay_to']);
   }
 
+  public function testWhatIsSoldIsWhatTheSiteBuilderChose(): void {
+    // Fields a display cannot configure (here the name, like a node's title,
+    // author and date) belong to the entity's template, not to what is sold.
+    $markdown = \Drupal::service('x402_pay.delivery')->markdown($this->entity, 'full')->getContent();
+    $this->assertSame(1, substr_count($markdown, 'Terms of X'), 'The label once, as the title.');
+  }
+
   public function testOnlyThoseAllowedCanSetPrices(): void {
     $items = $this->entity->get('field_price');
     $this->assertFalse($items->access('edit', $this->setUpCurrentUser([], ['administer entity_test content'])));
     $this->assertTrue($items->access('edit', $this->setUpCurrentUser([], ['administer entity_test content', 'set x402 prices'])));
+  }
+
+  public function testEachFieldSellsItsOwnViewMode(): void {
+    $this->addField('entity_test', 'field_summary', ['amount' => '0.002', 'view_mode' => 'teaser', 'canonical' => FALSE]);
+    $entity = EntityTest::load($this->entity->id());
+    $entity->set('field_summary', ['enabled' => 1])->save();
+
+    $this->assertSame('2000', $this->required('/x402/entity_test/1/teaser')['accepts'][0]['amount']);
+    $this->assertStringEndsWith('/x402/entity_test/1/teaser', $this->required('/x402/entity_test/1/teaser')['resource']['url']);
+    $this->assertSame('10000', $this->required('/x402/entity_test/1/full')['accepts'][0]['amount']);
+    // Without a view mode: the product sold on the canonical URL.
+    $this->assertSame('10000', $this->required('/x402/entity_test/1')['accepts'][0]['amount']);
+    $this->assertSame('10000', $this->required('/entity_test/1', ['Accept' => '*/*'])['accepts'][0]['amount']);
+    $this->assertSame(404, $this->get('/x402/entity_test/1/rss')->getStatusCode());
+
+    $link = implode(', ', $this->get('/entity_test/1', ['Accept' => 'text/html'])->headers->all('Link'));
+    $this->assertStringContainsString('</x402/entity_test/1/full>', $link);
+    $this->assertStringContainsString('</x402/entity_test/1/teaser>', $link);
+  }
+
+  public function testTwoFieldsCannotSellTheSameViewMode(): void {
+    $this->expectException(\LogicException::class);
+    $this->addField('entity_test', 'field_summary', ['view_mode' => 'full', 'canonical' => FALSE]);
+  }
+
+  public function testOnlyOneFieldChargesOnTheCanonicalUrl(): void {
+    $this->expectException(\LogicException::class);
+    $this->addField('entity_test', 'field_summary', ['view_mode' => 'teaser', 'canonical' => TRUE]);
+  }
+
+  public function testWithoutACanonicalFieldTheCanonicalUrlIsFree(): void {
+    $this->field->setSetting('canonical', FALSE)->save();
+    $this->assertSame(200, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
+    $this->assertSame(404, $this->get('/x402/entity_test/1')->getStatusCode());
+    $this->assertSame(402, $this->get('/x402/entity_test/1/full')->getStatusCode());
+  }
+
+  public function testThePriceEventCanChangeThePrice(): void {
+    $this->listen(fn(PriceEvent $e) => $e->setPrice('0.5'));
+    $this->assertSame('500000', $this->required('/x402/entity_test/1')['accepts'][0]['amount']);
+  }
+
+  public function testThePriceEventCanMakeItFree(): void {
+    $this->listen(fn(PriceEvent $e) => $e->makeFree());
+    $response = $this->get('/x402/entity_test/1');
+    $this->assertSame(200, $response->getStatusCode());
+    $this->assertStringStartsWith("# Terms of X\n", $response->getContent());
+    $this->assertFalse(\Drupal::database()->select('x402_pay_log', 'l')->countQuery()->execute()->fetchField() > 0, 'Nothing is charged, nothing is logged.');
+  }
+
+  public function testThePriceEventCanDeny(): void {
+    $this->listen(fn(PriceEvent $e) => $e->deny());
+    $this->assertSame(403, $this->get('/x402/entity_test/1')->getStatusCode());
+    $this->assertSame(403, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
+  }
+
+  public function testThePriceEventKnowsTheContext(): void {
+    $seen = NULL;
+    $this->listen(function (PriceEvent $e) use (&$seen) {
+      $seen = [$e->entity->id(), $e->viewMode, $e->price(), $e->account->isAnonymous()];
+    });
+    $this->get('/x402/entity_test/1/full');
+    $this->assertSame(['1', 'full', '0.01', TRUE], $seen);
+  }
+
+  public function testThoseWithThePermissionReadFree(): void {
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('access x402 content free')->save();
+    $response = $this->get('/x402/entity_test/1');
+    $this->assertSame(200, $response->getStatusCode());
+    $this->assertStringStartsWith("# Terms of X\n", $response->getContent());
+  }
+
+  public function testEachTranslationHasItsOwnPrice(): void {
+    $this->enableModules(['language']);
+    $this->installEntitySchema('entity_test_mul');
+    $this->installConfig(['language']);
+    ConfigurableLanguage::createFromLangcode('es')->save();
+    // The /es prefix is handled only once the container knows the site is
+    // multilingual.
+    $this->container->get('kernel')->rebuildContainer();
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view test entity translations')->save();
+    $this->addField('entity_test_mul', 'field_price', ['amount' => '0.01', 'allow_override' => TRUE], TRUE);
+
+    $entity = EntityTestMul::create(['name' => 'Terms of X', 'field_price' => ['enabled' => 1, 'amount' => '0.02']]);
+    $entity->addTranslation('es', ['name' => 'Términos de X', 'field_price' => ['enabled' => 1, 'amount' => '0.05']]);
+    $entity->save();
+    \Drupal::service('router.builder')->rebuild();
+
+    $this->assertSame('20000', X402PriceItem::find($entity)->requirements()['amount']);
+    $this->assertSame('50000', X402PriceItem::find($entity->getTranslation('es'))->requirements()['amount']);
+    $this->assertSame('20000', $this->required('/entity_test_mul/manage/1', ['Accept' => '*/*'])['accepts'][0]['amount']);
+    $this->assertSame('50000', $this->required('/es/entity_test_mul/manage/1', ['Accept' => '*/*'])['accepts'][0]['amount']);
+  }
+
+  public function testTheUpdateKeepsOlderFieldsChargingOnTheCanonicalUrl(): void {
+    // A field saved before view_mode and canonical existed: Drupal does not
+    // fill new settings into stored fields, so it sold nothing.
+    $config = \Drupal::configFactory()->getEditable('field.field.entity_test.entity_test.field_price');
+    $config->clear('settings.view_mode')->clear('settings.canonical')->save();
+    $this->resetFieldCaches();
+    $this->assertSame(200, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
+
+    \Drupal::moduleHandler()->loadInclude('x402_pay', 'install');
+    x402_pay_update_10002();
+    $this->resetFieldCaches();
+    $this->assertSame('full', \Drupal::config('field.field.entity_test.entity_test.field_price')->get('settings.view_mode'));
+    $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
+  }
+
+  /**
+   * Adds an x402_price field with the test seller key.
+   */
+  private function addField(string $entityType, string $name, array $settings, bool $translatable = FALSE): FieldConfig {
+    if (!FieldStorageConfig::loadByName($entityType, $name)) {
+      FieldStorageConfig::create(['field_name' => $name, 'entity_type' => $entityType, 'type' => 'x402_price'])->save();
+    }
+    $field = FieldConfig::create([
+      'field_name' => $name,
+      'entity_type' => $entityType,
+      'bundle' => $entityType,
+      'translatable' => $translatable,
+      'settings' => $settings + ['key_id' => 'seller'],
+    ]);
+    $field->save();
+    return $field;
+  }
+
+  private function resetFieldCaches(): void {
+    \Drupal::entityTypeManager()->getStorage('field_config')->resetCache();
+    \Drupal::service('entity_field.manager')->clearCachedFieldDefinitions();
+    \Drupal::entityTypeManager()->getStorage('entity_test')->resetCache();
+  }
+
+  private function mockFacilitator(): void {
+    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $this->container->set('x402_pay.facilitator', $facilitator);
+  }
+
+  private function payment(array $accepted): string {
+    return PaymentHeaders::encode(['x402Version' => 2, 'accepted' => $accepted, 'payload' => []]);
+  }
+
+  private function listen(callable $listener): void {
+    $this->container->get('event_dispatcher')->addListener(PriceEvent::class, $listener);
+  }
+
+  /**
+   * The decoded PAYMENT-REQUIRED of a 402.
+   */
+  private function required(string $path, array $headers = []): array {
+    $response = $this->get($path, $headers);
+    $this->assertSame(402, $response->getStatusCode(), $response->getContent());
+    return PaymentHeaders::decode($response->headers->get(PaymentHeaders::REQUIRED));
   }
 
   private function get(string $path, array $headers = []): Response {

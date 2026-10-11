@@ -38,3 +38,18 @@ function x402_pay_schema(): array {
 function x402_pay_update_10001(): void {
   \Drupal::service('config.installer')->installDefaultConfig('module', 'x402_pay');
 }
+
+/**
+ * Gives older x402 price fields the view mode and canonical settings.
+ *
+ * Without them a field sold nothing on the entity's own URL.
+ */
+function x402_pay_update_10002(): void {
+  $defaults = ['view_mode' => 'full', 'canonical' => TRUE];
+  foreach (\Drupal::configFactory()->listAll('field.field.') as $name) {
+    $config = \Drupal::configFactory()->getEditable($name);
+    if ($config->get('field_type') === 'x402_price') {
+      $config->set('settings', ($config->get('settings') ?? []) + $defaults)->save();
+    }
+  }
+}

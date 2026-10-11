@@ -29,6 +29,12 @@ field.field_settings.x402_price:
     allow_override:
       type: boolean
       label: 'Each entity can set its own price'
+    view_mode:
+      type: string
+      label: 'View mode sold'
+    canonical:
+      type: boolean
+      label: "Charge agents on the entity's own URL"
 
 field.value.x402_price:
   type: mapping

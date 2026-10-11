@@ -2,3 +2,6 @@ set x402 prices:
   title: 'Set x402 prices'
   description: 'Switch charging on or off for each entity, and set its own price where the field allows it.'
   restrict access: true
+access x402 content free:
+  title: 'Access x402 content free'
+  description: 'Get what agents pay for without paying. The price event can still change it.'

@@ -14,7 +14,9 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * /x402/{entity_type}/{entity}: the entity for whoever pays, people included.
+ * /x402/{entity_type}/{entity}/{view_mode}: one product, for whoever pays.
+ *
+ * Without a view mode: the product sold on the entity's own URL.
  */
 final class PaidEntityController implements ContainerInjectionInterface {
 
@@ -24,9 +26,9 @@ final class PaidEntityController implements ContainerInjectionInterface {
     return new self($container->get('x402_pay.delivery'));
   }
 
-  public function __invoke(Request $request, EntityInterface $entity): Response {
-    $price = X402PriceItem::find($entity) ?? throw new NotFoundHttpException();
-    return $this->delivery->charge($request, $entity, $price);
+  public function __invoke(Request $request, EntityInterface $entity, string $view_mode = ''): Response {
+    $item = X402PriceItem::find($entity, $view_mode === '' ? NULL : $view_mode) ?? throw new NotFoundHttpException();
+    return $this->delivery->charge($request, $entity, $item, $view_mode === '');
   }
 
 }

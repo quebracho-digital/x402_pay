@@ -9,11 +9,25 @@ use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\field\FieldConfigInterface;
+use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 
 /**
  * Hooks for x402 Pay.
  */
 class X402PayHooks {
+
+  /**
+   * Refuses a field that would sell what another already sells.
+   *
+   * The settings form says so first; this covers the API and config sync.
+   */
+  #[Hook('field_config_presave')]
+  public function fieldConfigPresave(FieldConfigInterface $field): void {
+    if ($field->getType() === 'x402_price' && ($conflict = X402PriceItem::conflict($field))) {
+      throw new \LogicException(strip_tags((string) $conflict));
+    }
+  }
 
   /**
    * Only those allowed can switch charging off or change an entity's price.

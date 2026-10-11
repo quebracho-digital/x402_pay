@@ -1,6 +1,7 @@
 x402_pay.entity:
-  path: '/x402/{entity_type}/{entity}'
+  path: '/x402/{entity_type}/{entity}/{view_mode}'
   defaults:
+    view_mode: ''
     _controller: '\Drupal\x402_pay\Controller\PaidEntityController'
   options:
     parameters:
