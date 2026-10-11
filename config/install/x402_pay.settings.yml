@@ -1,0 +1,3 @@
+# Agents that announce themselves. A request also counts as an agent when it
+# sends a PAYMENT-SIGNATURE or does not ask for text/html.
+agent_user_agents: 'GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|CCBot|Bytespider|Amazonbot|meta-externalagent|cohere-ai|Applebot-Extended'

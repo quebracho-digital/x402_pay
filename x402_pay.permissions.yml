@@ -1,0 +1,4 @@
+set x402 prices:
+  title: 'Set x402 prices'
+  description: 'Switch charging on or off for each entity, and set its own price where the field allows it.'
+  restrict access: true

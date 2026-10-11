@@ -1,0 +1,42 @@
+x402_pay.settings:
+  type: config_object
+  label: 'x402 Pay settings'
+  mapping:
+    agent_user_agents:
+      type: string
+      label: 'User-Agent pattern for agents (regex, case-insensitive)'
+
+field.storage_settings.x402_price:
+  type: mapping
+  label: 'x402 price storage settings'
+
+field.field_settings.x402_price:
+  type: mapping
+  label: 'x402 price settings'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Charge agents'
+    amount:
+      type: string
+      label: 'Price in USD'
+    network:
+      type: string
+      label: 'CAIP-2 network'
+    key_id:
+      type: string
+      label: 'Seller key'
+    allow_override:
+      type: boolean
+      label: 'Each entity can set its own price'
+
+field.value.x402_price:
+  type: mapping
+  label: 'Default value'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Charge for this'
+    amount:
+      type: string
+      label: 'Own price in USD'

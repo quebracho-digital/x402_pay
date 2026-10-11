@@ -8,7 +8,8 @@
     "drupal/key": "^1.18",
     "ext-gmp": "*",
     "kornrunner/keccak": "^1.1",
-    "kornrunner/secp256k1": "^0.4"
+    "kornrunner/secp256k1": "^0.4",
+    "league/html-to-markdown": "^5.1"
   },
   "suggest": {
     "drupal/commerce": "Needed by the x402_pay_commerce gateway."

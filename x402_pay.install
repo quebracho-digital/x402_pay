@@ -31,3 +31,10 @@ function x402_pay_schema(): array {
     ],
   ];
 }
+
+/**
+ * Adds the agent User-Agent list used on canonical URLs.
+ */
+function x402_pay_update_10001(): void {
+  \Drupal::service('config.installer')->installDefaultConfig('module', 'x402_pay');
+}
