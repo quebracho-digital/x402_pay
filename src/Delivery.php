@@ -9,6 +9,7 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
+use Drupal\x402_pay\Event\DeliveryEvent;
 use Drupal\x402_pay\Event\PriceEvent;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use League\HTMLToMarkdown\HtmlConverter;
@@ -36,20 +37,17 @@ class Delivery {
    *   Sold on the entity's own URL: that is the resource bought.
    */
   public function charge(Request $request, FieldableEntityInterface $entity, X402PriceItem $item, bool $canonical): Response {
-    $viewMode = $item->viewMode();
-    $event = $this->eventDispatcher->dispatch(new PriceEvent(
-      $entity, $item, $viewMode, $request, $this->currentUser, $item->price(),
-      $this->currentUser->hasPermission('access x402 content free'),
-    ));
+    $event = $this->quote($request, $entity, $item);
     if ($event->isDenied()) {
       return new JsonResponse(['error' => 'Not for sale to you'], 403);
     }
+    $deliver = fn() => $this->deliver($request, $entity, $item);
     if ($event->isFree()) {
-      return $this->markdown($entity, $viewMode);
+      return $deliver();
     }
     try {
-      $requirements = $item->requirements($event->price());
-      $seller = $item->seller();
+      $seller = $event->seller() ?? $item->seller();
+      $requirements = $this->requirements($event, $item);
     }
     catch (\RuntimeException | \InvalidArgumentException $e) {
       $this->logger->error('Cannot sell @type @id: @message', ['@type' => $entity->getEntityTypeId(), '@id' => $entity->id(), '@message' => $e->getMessage()]);
@@ -57,13 +55,44 @@ class Delivery {
     }
     $url = $canonical
       ? $entity->toUrl('canonical', ['absolute' => TRUE])
-      : Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id(), 'view_mode' => $viewMode], ['absolute' => TRUE, 'language' => $entity->language()]);
+      : Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id(), 'view_mode' => $item->viewMode()], ['absolute' => TRUE, 'language' => $entity->language()]);
     $resource = [
       'url' => $url->toString(TRUE)->getGeneratedUrl(),
       'description' => (string) $entity->label(),
-      'mimeType' => 'text/markdown',
+      'mimeType' => $event->mimeType(),
     ];
-    return $this->gate->handle($request, $requirements, $resource, $seller, fn() => $this->markdown($entity, $viewMode));
+    return $this->gate->handle($request, $requirements, $resource, $seller, $deliver);
+  }
+
+  /**
+   * What this sale costs, to whom it is paid, or whether it is not for sale:
+   * the field's answer, after the price event. The sale and the catalogue
+   * both ask here, so the catalogue announces what the sale will charge.
+   */
+  public function quote(Request $request, FieldableEntityInterface $entity, X402PriceItem $item): PriceEvent {
+    return $this->eventDispatcher->dispatch(new PriceEvent(
+      $entity, $item, $item->viewMode(), $request, $this->currentUser, $item->price(),
+      $this->currentUser->hasPermission('access x402 content free'),
+    ));
+  }
+
+  /**
+   * The PaymentRequirements of a quote.
+   *
+   * @throws \RuntimeException|\InvalidArgumentException
+   *   No usable seller key, or a price the network cannot charge.
+   */
+  public function requirements(PriceEvent $quote, X402PriceItem $item): array {
+    $seller = $quote->seller() ?? $item->seller();
+    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $seller->address());
+  }
+
+  /**
+   * What is sold: whatever a DeliveryEvent subscriber answers, else markdown.
+   */
+  private function deliver(Request $request, FieldableEntityInterface $entity, X402PriceItem $item): Response {
+    $event = $this->eventDispatcher->dispatch(new DeliveryEvent($entity, $item, $item->viewMode(), $request));
+    return $event->getResponse() ?? $this->markdown($entity, $item->viewMode());
   }
 
   /**

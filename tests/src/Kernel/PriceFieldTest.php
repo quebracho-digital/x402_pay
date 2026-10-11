@@ -16,12 +16,14 @@ use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\user\Entity\Role;
 use Drupal\x402_pay\CircleFacilitator;
+use Drupal\x402_pay\Event\DeliveryEvent;
 use Drupal\x402_pay\Event\PriceEvent;
 use Drupal\x402_pay\PaymentHeaders;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Signer;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -217,6 +219,45 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(['1', 'full', '0.01', TRUE], $seen);
   }
 
+  public function testThePriceEventCanChooseTheSellerAndDescribeTheProduct(): void {
+    // Hardhat's second test account: one seller per listing, not per field.
+    $other = new Signer('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
+    $this->listen(function (PriceEvent $e) use ($other) {
+      $e->setSeller($other);
+      $e->setMimeType('application/json');
+    });
+    $required = $this->required('/x402/entity_test/1');
+    $this->assertSame($other->address(), $required['accepts'][0]['payTo']);
+    $this->assertSame('application/json', $required['resource']['mimeType']);
+  }
+
+  public function testTheDeliveryEventReplacesWhatIsDelivered(): void {
+    $this->mockFacilitator();
+    $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, function (DeliveryEvent $e) {
+      $input = json_decode($e->request->getContent(), TRUE);
+      $e->setResponse(new JsonResponse(['echo' => $input['q'], 'of' => $e->entity->label(), 'mode' => $e->viewMode]));
+    });
+    $request = Request::create('/x402/entity_test/1', 'POST', content: '{"q":"hi"}');
+    $request->headers->set(PaymentHeaders::SIGNATURE, $this->payment(X402PriceItem::find($this->entity)->requirements()));
+    $response = $this->container->get('http_kernel')->handle($request);
+
+    $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+    $this->assertSame(['echo' => 'hi', 'of' => 'Terms of X', 'mode' => 'full'], json_decode($response->getContent(), TRUE));
+    $this->assertTrue($response->headers->has(PaymentHeaders::RESPONSE));
+  }
+
+  public function testAFailedDeliveryIsNotCharged(): void {
+    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $facilitator->expects($this->never())->method('settle');
+    $this->container->set('x402_pay.facilitator', $facilitator);
+    $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, fn(DeliveryEvent $e) => $e->setResponse(new JsonResponse(['error' => 'seller down'], 502)));
+
+    $response = $this->get('/x402/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment(X402PriceItem::find($this->entity)->requirements())]);
+    $this->assertSame(502, $response->getStatusCode());
+    $this->assertSame('not_settled', \Drupal::database()->select('x402_pay_log', 'l')->fields('l', ['status'])->execute()->fetchField());
+  }
+
   public function testThoseWithThePermissionReadFree(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('access x402 content free')->save();
     $response = $this->get('/x402/entity_test/1');
@@ -279,6 +320,25 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('text/markdown', $canonical['metadata']['mimeType']);
     $summary = array_values(array_filter($discovery['items'], fn($i) => str_ends_with($i['resource'], '/x402/entity_test/1/teaser')));
     $this->assertSame('2000', $summary[0]['accepts'][0]['amount']);
+  }
+
+  public function testTheDiscoveryQuotesLikeTheSale(): void {
+    // The catalogue must announce what the sale will charge, and to whom.
+    $other = new Signer('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
+    $this->listen(function (PriceEvent $e) use ($other) {
+      $e->setSeller($other);
+      $e->setPrice('0.03');
+      $e->setMimeType('application/json');
+    });
+    $item = $this->discovery()['items'][0];
+    $this->assertSame($other->address(), $item['accepts'][0]['payTo']);
+    $this->assertSame('30000', $item['accepts'][0]['amount']);
+    $this->assertSame('application/json', $item['metadata']['mimeType']);
+  }
+
+  public function testTheDiscoveryLeavesOutWhatIsDenied(): void {
+    $this->listen(fn(PriceEvent $e) => $e->deny());
+    $this->assertSame(0, $this->discovery()['pagination']['total']);
   }
 
   public function testTheDiscoveryPaginates(): void {

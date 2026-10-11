@@ -34,9 +34,15 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 - **The price event** (`Drupal\x402_pay\Event\PriceEvent`): before every
   sale, with the entity in the request's language, the view mode, the
   request and the account. A subscriber can change the price, make it free
-  or deny it. It starts at the field's price, free for those with *Access
-  x402 content free*. For a price per role, per kind of visitor or anything
-  else; ECA support (`x402_pay_eca`) comes later.
+  or deny it, choose the seller (one wallet per entity, e.g. per listing of
+  a market) and say what the buyer gets (`mimeType`). It starts at the
+  field's price, free for those with *Access x402 content free*. The
+  catalogue asks the same question, so it announces what the sale will
+  charge, and to whom. ECA support (`x402_pay_eca`) comes later.
+- **The delivery event** (`Drupal\x402_pay\Event\DeliveryEvent`): once the
+  payment verified, a subscriber can answer instead of the markdown, e.g.
+  call a service with the request's input (any method, POST included). A
+  response other than 2xx is never charged.
 - **`x402_pay_commerce`**: a Drupal Commerce payment gateway on top of it, so
   a person can check out in USDC.
 

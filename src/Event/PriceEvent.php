@@ -7,11 +7,13 @@ namespace Drupal\x402_pay\Event;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
+use Drupal\x402_pay\Signer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
- * Before charging: change the price, make it free, or deny it.
+ * Before charging: change the price, make it free, or deny it; choose who
+ * is paid and say what the buyer gets.
  *
  * Dispatched on every sale, with the whole context: the entity (already in
  * the request's language), what is sold (the view mode), who asks and how.
@@ -21,6 +23,10 @@ use Symfony\Contracts\EventDispatcher\Event;
 final class PriceEvent extends Event {
 
   private bool $denied = FALSE;
+
+  private ?Signer $seller = NULL;
+
+  private string $mimeType = 'text/markdown';
 
   public function __construct(
     public readonly FieldableEntityInterface $entity,
@@ -59,6 +65,31 @@ final class PriceEvent extends Event {
   public function deny(): void {
     $this->denied = TRUE;
     $this->stopPropagation();
+  }
+
+  /**
+   * The seller's key, when not the field's: one seller per entity.
+   *
+   * The money goes to this key's address; it signs the facilitator's proof.
+   */
+  public function setSeller(Signer $seller): void {
+    $this->seller = $seller;
+  }
+
+  public function seller(): ?Signer {
+    return $this->seller;
+  }
+
+  /**
+   * What the buyer gets, announced in the 402: markdown unless delivered
+   * otherwise (see DeliveryEvent).
+   */
+  public function setMimeType(string $mimeType): void {
+    $this->mimeType = $mimeType;
+  }
+
+  public function mimeType(): string {
+    return $this->mimeType;
   }
 
 }
