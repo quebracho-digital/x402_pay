@@ -31,12 +31,30 @@ final class PaymentGateTest extends UnitTestCase {
   private const BUYER = '0x857b06519E91e3A54538791bDbb0E22373e36b66';
   private const TX = '0x2189f224626f989efef1c28f8f72a6ea205805f7394313139ddc2f51b027674d';
 
+  /**
+   * The facilitator, mocked.
+   */
   private CircleFacilitator&MockObject $facilitator;
+  /**
+   * The payment log, mocked.
+   */
   private PaymentLog&MockObject $log;
+  /**
+   * The gate under test.
+   */
   private PaymentGate $gate;
+  /**
+   * The seller's key.
+   */
   private Signer $seller;
+  /**
+   * How many times the handler ran.
+   */
   private int $handlerCalls = 0;
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->facilitator = $this->createMock(CircleFacilitator::class);
@@ -45,6 +63,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->seller = new Signer('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
   }
 
+  /**
+   * The payment requirements of the test product.
+   */
   private function requirements(): array {
     return [
       'scheme' => 'exact',
@@ -57,10 +78,16 @@ final class PaymentGateTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * The resource the test product describes.
+   */
   private function resource(): array {
     return ['url' => 'https://ombu.ddev.site/product/1/call', 'description' => 'Ping', 'mimeType' => 'application/json'];
   }
 
+  /**
+   * A payment, with some of the accepted requirements overridden.
+   */
   private function payment(array $accepted_overrides = []): array {
     return [
       'x402Version' => 2,
@@ -69,13 +96,20 @@ final class PaymentGateTest extends UnitTestCase {
       'payload' => [
         'signature' => '0x' . str_repeat('11', 65),
         'authorization' => [
-          'from' => self::BUYER, 'to' => self::PAY_TO, 'value' => '10000',
-          'validAfter' => '0', 'validBefore' => '9999999999', 'nonce' => '0x' . str_repeat('22', 32),
+          'from' => self::BUYER,
+          'to' => self::PAY_TO,
+          'value' => '10000',
+          'validAfter' => '0',
+          'validBefore' => '9999999999',
+          'nonce' => '0x' . str_repeat('22', 32),
         ],
       ],
     ];
   }
 
+  /**
+   * A request carrying this payment, or none.
+   */
   private function request(?array $payment): Request {
     $request = Request::create('/product/1/call', 'POST', content: '{}');
     if ($payment !== NULL) {
@@ -84,6 +118,9 @@ final class PaymentGateTest extends UnitTestCase {
     return $request;
   }
 
+  /**
+   * Runs the gate around a handler that answers with the given status.
+   */
   private function handle(Request $request, int $status = 200): Response {
     return $this->gate->handle($request, $this->requirements(), $this->resource(), $this->seller, function () use ($status) {
       $this->handlerCalls++;
@@ -91,10 +128,16 @@ final class PaymentGateTest extends UnitTestCase {
     });
   }
 
+  /**
+   * Makes the facilitator verify every payment.
+   */
   private function valid(): void {
     $this->facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => self::BUYER]);
   }
 
+  /**
+   * Unpaid gets 402 with requirements and never runs the handler.
+   */
   public function testUnpaidGets402WithRequirementsAndNeverRunsTheHandler(): void {
     $this->facilitator->expects($this->never())->method('verify');
     $response = $this->handle($this->request(NULL));
@@ -107,6 +150,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
+  /**
+   * Malformed payment is 400.
+   */
   public function testMalformedPaymentIs400(): void {
     $request = $this->request(NULL);
     $request->headers->set('PAYMENT-SIGNATURE', '%%%');
@@ -114,6 +160,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
+  /**
+   * Payment for other terms is 402 without asking the facilitator.
+   */
   #[DataProvider('mismatches')]
   public function testPaymentForOtherTermsIs402WithoutAskingTheFacilitator(array $override): void {
     $this->facilitator->expects($this->never())->method('verify');
@@ -122,6 +171,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
+  /**
+   * Payments for other terms than those asked.
+   */
   public static function mismatches(): array {
     return [
       'less money' => [['amount' => '9999']],
@@ -132,15 +184,30 @@ final class PaymentGateTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * Address case does not matter.
+   */
   public function testAddressCaseDoesNotMatter(): void {
     $this->valid();
-    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => self::BUYER]);
+    $this->facilitator->method('settle')->willReturn([
+      'success' => TRUE,
+      'transaction' => self::TX,
+      'network' => 'eip155:5042002',
+      'payer' => self::BUYER,
+    ]);
     $response = $this->handle($this->request($this->payment(['payTo' => strtolower(self::PAY_TO)])));
     $this->assertSame(200, $response->getStatusCode());
   }
 
+  /**
+   * Invalid payment is 402 and never runs the handler.
+   */
   public function testInvalidPaymentIs402AndNeverRunsTheHandler(): void {
-    $this->facilitator->method('verify')->willReturn(['isValid' => FALSE, 'invalidReason' => 'insufficient_funds', 'payer' => self::BUYER]);
+    $this->facilitator->method('verify')->willReturn([
+      'isValid' => FALSE,
+      'invalidReason' => 'insufficient_funds',
+      'payer' => self::BUYER,
+    ]);
     $this->facilitator->expects($this->never())->method('settle');
     $response = $this->handle($this->request($this->payment()));
 
@@ -149,6 +216,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
+  /**
+   * Paid and delivered is settled and logged.
+   */
   public function testPaidAndDeliveredIsSettledAndLogged(): void {
     $this->valid();
     $this->facilitator->expects($this->once())->method('settle')
@@ -167,21 +237,35 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(self::TX, $settlement['transaction']);
   }
 
+  /**
+   * Reports how long each step took.
+   */
   public function testReportsHowLongEachStepTook(): void {
     $this->valid();
-    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => self::BUYER]);
+    $this->facilitator->method('settle')->willReturn([
+      'success' => TRUE,
+      'transaction' => self::TX,
+      'network' => 'eip155:5042002',
+      'payer' => self::BUYER,
+    ]);
 
     $timing = $this->handle($this->request($this->payment()))->headers->get('Server-Timing');
 
     $this->assertMatchesRegularExpression('/^x402-verify;dur=\d+(\.\d+)?, x402-handler;dur=\d+(\.\d+)?, x402-settle;dur=\d+(\.\d+)?$/', (string) $timing);
   }
 
+  /**
+   * Reports the steps that ran when delivery fails.
+   */
   public function testReportsTheStepsThatRanWhenDeliveryFails(): void {
     $this->valid();
     $timing = $this->handle($this->request($this->payment()), 502)->headers->get('Server-Timing');
     $this->assertMatchesRegularExpression('/^x402-verify;dur=[\d.]+, x402-handler;dur=[\d.]+$/', (string) $timing);
   }
 
+  /**
+   * Failed delivery is never settled.
+   */
   public function testFailedDeliveryIsNeverSettled(): void {
     $this->valid();
     $this->facilitator->expects($this->never())->method('settle');
@@ -195,9 +279,18 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertFalse($response->headers->has('PAYMENT-RESPONSE'));
   }
 
+  /**
+   * Failed settlement withholds the body.
+   */
   public function testFailedSettlementWithholdsTheBody(): void {
     $this->valid();
-    $this->facilitator->method('settle')->willReturn(['success' => FALSE, 'errorReason' => 'insufficient_funds', 'transaction' => '', 'network' => 'eip155:5042002', 'payer' => self::BUYER]);
+    $this->facilitator->method('settle')->willReturn([
+      'success' => FALSE,
+      'errorReason' => 'insufficient_funds',
+      'transaction' => '',
+      'network' => 'eip155:5042002',
+      'payer' => self::BUYER,
+    ]);
     $this->log->expects($this->once())->method('record')->with($this->callback(fn(array $e) => $e['status'] === 'failed'));
 
     $response = $this->handle($this->request($this->payment()));
@@ -207,6 +300,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertFalse(PaymentHeaders::decode($response->headers->get('PAYMENT-RESPONSE'))['success']);
   }
 
+  /**
+   * Facilitator down before the handler is 502 and nothing runs.
+   */
   public function testFacilitatorDownBeforeTheHandlerIs502AndNothingRuns(): void {
     $this->facilitator->method('verify')->willThrowException(new FacilitatorException('timeout'));
     $response = $this->handle($this->request($this->payment()));
@@ -214,6 +310,9 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(0, $this->handlerCalls);
   }
 
+  /**
+   * Facilitator down at settlement withholds the body.
+   */
   public function testFacilitatorDownAtSettlementWithholdsTheBody(): void {
     $this->valid();
     $this->facilitator->method('settle')->willThrowException(new FacilitatorException('registration_required'));

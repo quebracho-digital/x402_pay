@@ -33,6 +33,14 @@ class Delivery {
   ) {}
 
   /**
+   * Sells one product of an entity: 402, then the delivery once paid.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The buyer's request.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity sold.
+   * @param \Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem $item
+   *   The field item that sells it.
    * @param bool $canonical
    *   Sold on the entity's own URL: that is the resource bought.
    */
@@ -50,12 +58,20 @@ class Delivery {
       $requirements = $this->requirements($event, $item);
     }
     catch (\RuntimeException | \InvalidArgumentException $e) {
-      $this->logger->error('Cannot sell @type @id: @message', ['@type' => $entity->getEntityTypeId(), '@id' => $entity->id(), '@message' => $e->getMessage()]);
+      $this->logger->error('Cannot sell @type @id: @message', [
+        '@type' => $entity->getEntityTypeId(),
+        '@id' => $entity->id(),
+        '@message' => $e->getMessage(),
+      ]);
       return new JsonResponse(['error' => 'Not for sale right now'], 503);
     }
     $url = $canonical
       ? $entity->toUrl('canonical', ['absolute' => TRUE])
-      : Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id(), 'view_mode' => $item->viewMode()], ['absolute' => TRUE, 'language' => $entity->language()]);
+      : Url::fromRoute('x402_pay.entity', [
+        'entity_type' => $entity->getEntityTypeId(),
+        'entity' => $entity->id(),
+        'view_mode' => $item->viewMode(),
+      ], ['absolute' => TRUE, 'language' => $entity->language()]);
     $resource = [
       'url' => $url->toString(TRUE)->getGeneratedUrl(),
       'description' => (string) $entity->label(),
@@ -65,8 +81,9 @@ class Delivery {
   }
 
   /**
-   * What this sale costs, to whom it is paid, or whether it is not for sale:
-   * the field's answer, after the price event. The sale and the catalogue
+   * What this sale costs, to whom it is paid, or whether it is not for sale.
+   *
+   * The field's answer, after the price event. The sale and the catalogue
    * both ask here, so the catalogue announces what the sale will charge.
    */
   public function quote(Request $request, FieldableEntityInterface $entity, X402PriceItem $item): PriceEvent {

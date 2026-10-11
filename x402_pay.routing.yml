@@ -16,4 +16,5 @@ x402_pay.discovery:
     _controller: '\Drupal\x402_pay\Controller\DiscoveryController'
   methods: [GET]
   requirements:
+    # Public: the catalogue lists only what the visitor can see and buy.
     _access: 'TRUE'

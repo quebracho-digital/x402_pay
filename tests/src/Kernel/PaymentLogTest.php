@@ -16,18 +16,30 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 final class PaymentLogTest extends KernelTestBase {
 
+  /**
+   * {@inheritdoc}
+   */
   protected static $modules = ['x402_pay', 'key'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installSchema('x402_pay', ['x402_pay_log']);
   }
 
-  public function testTheGateIsAService(): void {
+  /**
+   * The gate is service.
+   */
+  public function testTheGateIsService(): void {
     $this->assertInstanceOf(PaymentGate::class, $this->container->get('x402_pay.gate'));
   }
 
-  public function testRecordsAPayment(): void {
+  /**
+   * Records payments.
+   */
+  public function testRecordsPayments(): void {
     $this->container->get('x402_pay.log')->record([
       'resource' => 'https://ombu.ddev.site/product/1/call',
       'network' => 'eip155:5042002',

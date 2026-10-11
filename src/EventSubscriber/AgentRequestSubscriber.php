@@ -28,6 +28,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     private readonly KillSwitch $pageCacheKillSwitch,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public static function getSubscribedEvents(): array {
     // After routing and its access check (32), before the dynamic page
     // cache could answer with the HTML page (27).
@@ -37,6 +40,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     ];
   }
 
+  /**
+   * Charges an agent on the entity's own URL; browsers pass through.
+   */
   public function onRequest(RequestEvent $event): void {
     $entity = $event->isMainRequest() ? $this->entity($event->getRequest()) : NULL;
     $item = $entity ? X402PriceItem::find($entity) : NULL;
@@ -61,7 +67,11 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     $this->pageCacheKillSwitch->trigger();
     foreach ($items as $item) {
       $mode = $item->viewMode();
-      $paid = Url::fromRoute('x402_pay.entity', ['entity_type' => $entity->getEntityTypeId(), 'entity' => $entity->id(), 'view_mode' => $mode])->toString(TRUE)->getGeneratedUrl();
+      $paid = Url::fromRoute('x402_pay.entity', [
+        'entity_type' => $entity->getEntityTypeId(),
+        'entity' => $entity->id(),
+        'view_mode' => $mode,
+      ])->toString(TRUE)->getGeneratedUrl();
       $event->getResponse()->headers->set('Link', "<$paid>; rel=\"alternate\"; type=\"text/markdown\"; title=\"$mode\"", FALSE);
     }
   }

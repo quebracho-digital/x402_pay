@@ -44,11 +44,23 @@ final class PriceFieldTest extends KernelTestBase {
   private const PAY_TO = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
   private const TX = '0x2189f224626f989efef1c28f8f72a6ea205805f7394313139ddc2f51b027674d';
 
+  /**
+   * {@inheritdoc}
+   */
   protected static $modules = ['x402_pay', 'key', 'entity_test', 'field', 'user', 'system', 'text', 'filter'];
 
+  /**
+   * The entity sold.
+   */
   private EntityTest $entity;
+  /**
+   * The price field.
+   */
   private FieldConfig $field;
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('entity_test');
@@ -66,7 +78,11 @@ final class PriceFieldTest extends KernelTestBase {
       'key_provider_settings' => ['key_value' => self::KEY],
     ])->save();
 
-    $this->field = $this->addField('entity_test', 'field_price', ['amount' => '0.01', 'view_mode' => 'full', 'canonical' => TRUE]);
+    $this->field = $this->addField('entity_test', 'field_price', [
+      'amount' => '0.01',
+      'view_mode' => 'full',
+      'canonical' => TRUE,
+    ]);
     // The price itself is never part of what is sold.
     EntityViewMode::create(['id' => 'entity_test.full', 'label' => 'Full', 'targetEntityType' => 'entity_test'])->save();
     \Drupal::service('entity_display.repository')->getViewDisplay('entity_test', 'entity_test', 'full')
@@ -76,6 +92,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->entity->save();
   }
 
+  /**
+   * Pay to comes from the key and the price from the field.
+   */
   public function testPayToComesFromTheKeyAndThePriceFromTheField(): void {
     $item = X402PriceItem::find($this->entity);
     $requirements = $item->requirements();
@@ -85,22 +104,34 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('10000', $requirements['amount']);
   }
 
+  /**
+   * The entity price wins when override is allowed.
+   */
   public function testTheEntityPriceWinsWhenOverrideIsAllowed(): void {
     $this->field->setSetting('allow_override', TRUE)->save();
     $entity = EntityTest::load($this->entity->id());
     $this->assertSame('5000000', X402PriceItem::find($entity)->requirements()['amount']);
   }
 
+  /**
+   * An entity with the box unchecked is free.
+   */
   public function testAnEntityWithTheBoxUncheckedIsFree(): void {
     $this->entity->set('field_price', ['enabled' => 0])->save();
     $this->assertNull(X402PriceItem::find($this->entity));
   }
 
+  /**
+   * The field turned off makes every entity free.
+   */
   public function testTheFieldTurnedOffMakesEveryEntityFree(): void {
     $this->field->setSetting('enabled', FALSE)->save();
     $this->assertNull(X402PriceItem::find(EntityTest::load($this->entity->id())));
   }
 
+  /**
+   * The separate route asks for payment.
+   */
   public function testTheSeparateRouteAsksForPayment(): void {
     $response = $this->get('/x402/entity_test/1');
     $this->assertSame(402, $response->getStatusCode());
@@ -111,24 +142,42 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('text/markdown', $required['resource']['mimeType']);
   }
 
-  public function testTheSeparateRouteIsNotFoundForAFreeEntity(): void {
+  /**
+   * The separate route is not found for free entities.
+   */
+  public function testTheSeparateRouteIsNotFoundForFreeEntities(): void {
     $this->entity->set('field_price', ['enabled' => 0])->save();
     $this->assertSame(404, $this->get('/x402/entity_test/1')->getStatusCode());
   }
 
+  /**
+   * The canonical url asks agents for payment.
+   */
   public function testTheCanonicalUrlAsksAgentsForPayment(): void {
     $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => 'text/markdown'])->getStatusCode());
     $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
-    $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => 'text/html', 'User-Agent' => 'Mozilla/5.0 (compatible; GPTBot/1.2)'])->getStatusCode());
+    $this->assertSame(402, $this->get('/entity_test/1', [
+      'Accept' => 'text/html',
+      'User-Agent' => 'Mozilla/5.0 (compatible; GPTBot/1.2)',
+    ])->getStatusCode());
   }
 
-  public function testABrowserStillSeesThePage(): void {
-    $response = $this->get('/entity_test/1', ['Accept' => 'text/html,application/xhtml+xml', 'User-Agent' => 'Mozilla/5.0 Firefox/140.0']);
+  /**
+   * Browsers still see the page.
+   */
+  public function testBrowsersStillSeeThePage(): void {
+    $response = $this->get('/entity_test/1', [
+      'Accept' => 'text/html,application/xhtml+xml',
+      'User-Agent' => 'Mozilla/5.0 Firefox/140.0',
+    ]);
     $this->assertSame(200, $response->getStatusCode());
     $this->assertStringContainsString('</x402/entity_test/1/full>', (string) $response->headers->get('Link'));
   }
 
-  public function testAPaidRequestGetsMarkdownAndIsLogged(): void {
+  /**
+   * Paid requests get markdown and are logged.
+   */
+  public function testPaidRequestsGetMarkdownAndAreLogged(): void {
     $this->mockFacilitator();
     $accepted = X402PriceItem::find($this->entity)->requirements();
     $response = $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($accepted)]);
@@ -143,6 +192,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(self::PAY_TO, $row['pay_to']);
   }
 
+  /**
+   * What is sold is what the site builder chose.
+   */
   public function testWhatIsSoldIsWhatTheSiteBuilderChose(): void {
     // Fields a display cannot configure (here the name, like a node's title,
     // author and date) belong to the entity's template, not to what is sold.
@@ -150,12 +202,21 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(1, substr_count($markdown, 'Terms of X'), 'The label once, as the title.');
   }
 
+  /**
+   * Only those allowed can set prices.
+   */
   public function testOnlyThoseAllowedCanSetPrices(): void {
     $items = $this->entity->get('field_price');
     $this->assertFalse($items->access('edit', $this->setUpCurrentUser([], ['administer entity_test content'])));
-    $this->assertTrue($items->access('edit', $this->setUpCurrentUser([], ['administer entity_test content', 'set x402 prices'])));
+    $this->assertTrue($items->access('edit', $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'set x402 prices',
+    ])));
   }
 
+  /**
+   * Each field sells its own view mode.
+   */
   public function testEachFieldSellsItsOwnViewMode(): void {
     $this->addField('entity_test', 'field_summary', ['amount' => '0.002', 'view_mode' => 'teaser', 'canonical' => FALSE]);
     $entity = EntityTest::load($this->entity->id());
@@ -174,28 +235,43 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertStringContainsString('</x402/entity_test/1/teaser>', $link);
   }
 
+  /**
+   * Two fields cannot sell the same view mode.
+   */
   public function testTwoFieldsCannotSellTheSameViewMode(): void {
     $this->expectException(\LogicException::class);
     $this->addField('entity_test', 'field_summary', ['view_mode' => 'full', 'canonical' => FALSE]);
   }
 
+  /**
+   * Only one field charges on the canonical url.
+   */
   public function testOnlyOneFieldChargesOnTheCanonicalUrl(): void {
     $this->expectException(\LogicException::class);
     $this->addField('entity_test', 'field_summary', ['view_mode' => 'teaser', 'canonical' => TRUE]);
   }
 
-  public function testWithoutACanonicalFieldTheCanonicalUrlIsFree(): void {
+  /**
+   * Without canonical field the canonical url is free.
+   */
+  public function testWithoutCanonicalFieldTheCanonicalUrlIsFree(): void {
     $this->field->setSetting('canonical', FALSE)->save();
     $this->assertSame(200, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
     $this->assertSame(404, $this->get('/x402/entity_test/1')->getStatusCode());
     $this->assertSame(402, $this->get('/x402/entity_test/1/full')->getStatusCode());
   }
 
+  /**
+   * The price event can change the price.
+   */
   public function testThePriceEventCanChangeThePrice(): void {
     $this->listen(fn(PriceEvent $e) => $e->setPrice('0.5'));
     $this->assertSame('500000', $this->required('/x402/entity_test/1')['accepts'][0]['amount']);
   }
 
+  /**
+   * The price event can make it free.
+   */
   public function testThePriceEventCanMakeItFree(): void {
     $this->listen(fn(PriceEvent $e) => $e->makeFree());
     $response = $this->get('/x402/entity_test/1');
@@ -204,12 +280,18 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertFalse(\Drupal::database()->select('x402_pay_log', 'l')->countQuery()->execute()->fetchField() > 0, 'Nothing is charged, nothing is logged.');
   }
 
+  /**
+   * The price event can deny.
+   */
   public function testThePriceEventCanDeny(): void {
     $this->listen(fn(PriceEvent $e) => $e->deny());
     $this->assertSame(403, $this->get('/x402/entity_test/1')->getStatusCode());
     $this->assertSame(403, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
   }
 
+  /**
+   * The price event knows the context.
+   */
   public function testThePriceEventKnowsTheContext(): void {
     $seen = NULL;
     $this->listen(function (PriceEvent $e) use (&$seen) {
@@ -219,6 +301,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(['1', 'full', '0.01', TRUE], $seen);
   }
 
+  /**
+   * The price event can choose the seller and describe the product.
+   */
   public function testThePriceEventCanChooseTheSellerAndDescribeTheProduct(): void {
     // Hardhat's second test account: one seller per listing, not per field.
     $other = new Signer('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
@@ -231,7 +316,10 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('application/json', $required['resource']['mimeType']);
   }
 
-  public function testASlowProductGivesTheBuyerMoreTimeToPay(): void {
+  /**
+   * Slow products give the buyer more time to pay.
+   */
+  public function testSlowProductsGiveTheBuyerMoreTimeToPay(): void {
     // The buyer's signature must outlive the delivery, or the settlement
     // fails after the seller did the work.
     $this->listen(fn(PriceEvent $e) => $e->setTimeout(600));
@@ -239,6 +327,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(600, $this->discovery()['items'][0]['accepts'][0]['maxTimeoutSeconds']);
   }
 
+  /**
+   * The delivery event replaces what is delivered.
+   */
   public function testTheDeliveryEventReplacesWhatIsDelivered(): void {
     $this->mockFacilitator();
     $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, function (DeliveryEvent $e) {
@@ -254,9 +345,15 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertTrue($response->headers->has(PaymentHeaders::RESPONSE));
   }
 
-  public function testAFailedDeliveryIsNotCharged(): void {
+  /**
+   * Failed deliveries are not charged.
+   */
+  public function testFailedDeliveriesAreNotCharged(): void {
     $facilitator = $this->createMock(CircleFacilitator::class);
-    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $facilitator->method('verify')->willReturn([
+      'isValid' => TRUE,
+      'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
+    ]);
     $facilitator->expects($this->never())->method('settle');
     $this->container->set('x402_pay.facilitator', $facilitator);
     $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, fn(DeliveryEvent $e) => $e->setResponse(new JsonResponse(['error' => 'seller down'], 502)));
@@ -266,6 +363,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('not_settled', \Drupal::database()->select('x402_pay_log', 'l')->fields('l', ['status'])->execute()->fetchField());
   }
 
+  /**
+   * Those with the permission read free.
+   */
   public function testThoseWithThePermissionReadFree(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('access x402 content free')->save();
     $response = $this->get('/x402/entity_test/1');
@@ -273,6 +373,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertStringStartsWith("# Terms of X\n", $response->getContent());
   }
 
+  /**
+   * Each translation has its own price.
+   */
   public function testEachTranslationHasItsOwnPrice(): void {
     $this->enableModules(['language']);
     $this->installEntitySchema('entity_test_mul');
@@ -295,6 +398,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('50000', $this->required('/es/entity_test_mul/manage/1', ['Accept' => '*/*'])['accepts'][0]['amount']);
   }
 
+  /**
+   * The update keeps older fields charging on the canonical url.
+   */
   public function testTheUpdateKeepsOlderFieldsChargingOnTheCanonicalUrl(): void {
     // A field saved before view_mode and canonical existed: Drupal does not
     // fill new settings into stored fields, so it sold nothing.
@@ -310,6 +416,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(402, $this->get('/entity_test/1', ['Accept' => '*/*'])->getStatusCode());
   }
 
+  /**
+   * The discovery lists every product like circles.
+   */
   public function testTheDiscoveryListsEveryProductLikeCircles(): void {
     $this->addField('entity_test', 'field_summary', ['amount' => '0.002', 'view_mode' => 'teaser', 'canonical' => FALSE]);
     EntityTest::load(1)->set('field_summary', ['enabled' => 1])->save();
@@ -330,6 +439,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('2000', $summary[0]['accepts'][0]['amount']);
   }
 
+  /**
+   * The discovery quotes like the sale.
+   */
   public function testTheDiscoveryQuotesLikeTheSale(): void {
     // The catalogue must announce what the sale will charge, and to whom.
     $other = new Signer('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
@@ -344,11 +456,17 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame('application/json', $item['metadata']['mimeType']);
   }
 
+  /**
+   * The discovery leaves out what is denied.
+   */
   public function testTheDiscoveryLeavesOutWhatIsDenied(): void {
     $this->listen(fn(PriceEvent $e) => $e->deny());
     $this->assertSame(0, $this->discovery()['pagination']['total']);
   }
 
+  /**
+   * The discovery leaves out what cannot be sold.
+   */
   public function testTheDiscoveryLeavesOutWhatCannotBeSold(): void {
     // A product without a usable seller key cannot be paid for: listing it
     // would only send agents to a 503; failing the whole catalogue is worse.
@@ -356,6 +474,9 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(0, $this->discovery()['pagination']['total']);
   }
 
+  /**
+   * The discovery paginates.
+   */
   public function testTheDiscoveryPaginates(): void {
     EntityTest::create(['name' => 'Second', 'field_price' => ['enabled' => 1]])->save();
     $page = $this->discovery('?limit=1&offset=1');
@@ -363,12 +484,18 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(['limit' => 1, 'offset' => 1, 'total' => 2], $page['pagination']);
   }
 
+  /**
+   * The discovery lists nothing that cannot be seen.
+   */
   public function testTheDiscoveryListsNothingThatCannotBeSeen(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->revokePermission('view test entity')->save();
     $this->assertSame([], $this->discovery()['items']);
   }
 
-  public function testTheDiscoveryForgetsAFieldTurnedOff(): void {
+  /**
+   * The discovery forgets fields turned off.
+   */
+  public function testTheDiscoveryForgetsFieldsTurnedOff(): void {
     $this->field->setSetting('enabled', FALSE)->save();
     $this->assertSame(0, $this->discovery()['pagination']['total']);
   }
@@ -401,23 +528,43 @@ final class PriceFieldTest extends KernelTestBase {
     return $field;
   }
 
+  /**
+   * Forgets cached field definitions and entities.
+   */
   private function resetFieldCaches(): void {
     \Drupal::entityTypeManager()->getStorage('field_config')->resetCache();
     \Drupal::service('entity_field.manager')->clearCachedFieldDefinitions();
     \Drupal::entityTypeManager()->getStorage('entity_test')->resetCache();
   }
 
+  /**
+   * A facilitator that verifies and settles every payment.
+   */
   private function mockFacilitator(): void {
     $facilitator = $this->createMock(CircleFacilitator::class);
-    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
-    $facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $facilitator->method('verify')->willReturn([
+      'isValid' => TRUE,
+      'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
+    ]);
+    $facilitator->method('settle')->willReturn([
+      'success' => TRUE,
+      'transaction' => self::TX,
+      'network' => 'eip155:5042002',
+      'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
+    ]);
     $this->container->set('x402_pay.facilitator', $facilitator);
   }
 
+  /**
+   * A PAYMENT-SIGNATURE header for the accepted requirements.
+   */
   private function payment(array $accepted): string {
     return PaymentHeaders::encode(['x402Version' => 2, 'accepted' => $accepted, 'payload' => []]);
   }
 
+  /**
+   * Adds a price event listener.
+   */
   private function listen(callable $listener): void {
     $this->container->get('event_dispatcher')->addListener(PriceEvent::class, $listener);
   }
@@ -431,6 +578,9 @@ final class PriceFieldTest extends KernelTestBase {
     return PaymentHeaders::decode($response->headers->get(PaymentHeaders::REQUIRED));
   }
 
+  /**
+   * Handles a GET request through the kernel.
+   */
   private function get(string $path, array $headers = []): Response {
     $request = Request::create($path);
     foreach ($headers as $name => $value) {

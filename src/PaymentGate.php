@@ -11,10 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Charges for a response over x402, and settles only when it is a 2xx.
  *
- * verify → run the handler → 2xx? settle → hand over the body only once the
- * money settled. A failed handler costs the buyer nothing; a failed
- * settlement gets the buyer nothing. Each paid response says how long each
- * step took, in a Server-Timing header.
+ * The flow: verify → run the handler → 2xx? settle → hand over the body
+ * only once the money settled. A failed handler costs the buyer nothing;
+ * a failed settlement gets the buyer nothing. Each paid response says how
+ * long each step took, in a Server-Timing header.
  */
 class PaymentGate {
 
@@ -29,6 +29,10 @@ class PaymentGate {
   ) {}
 
   /**
+   * Charges for the handler's response: 402, verify, run, settle.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The buyer's request, with PAYMENT-SIGNATURE once it pays.
    * @param array $requirements
    *   One x402 PaymentRequirements (scheme, network, amount, asset, payTo,
    *   maxTimeoutSeconds, extra). Set by the caller, so price and payTo can
@@ -95,7 +99,11 @@ class PaymentGate {
       return $this->withTimings($failed);
     }
 
-    $this->log->record(['status' => 'settled', 'transaction' => $settlement['transaction'], 'payer' => $settlement['payer'] ?? $entry['payer']] + $entry);
+    $this->log->record([
+      'status' => 'settled',
+      'transaction' => $settlement['transaction'],
+      'payer' => $settlement['payer'] ?? $entry['payer'],
+    ] + $entry);
     $response->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode([
       'success' => TRUE,
       'transaction' => $settlement['transaction'],
@@ -118,11 +126,17 @@ class PaymentGate {
     }
   }
 
+  /**
+   * Adds how long each step took as a Server-Timing header.
+   */
   private function withTimings(Response $response): Response {
     $response->headers->set('Server-Timing', implode(', ', array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($this->timings), $this->timings)));
     return $response;
   }
 
+  /**
+   * The 402 that asks for payment, as JSON and as PAYMENT-REQUIRED.
+   */
   private function required(array $requirements, array $resource, string $error): Response {
     $required = ['x402Version' => 2, 'error' => $error, 'resource' => $resource, 'accepts' => [$requirements]];
     $response = new JsonResponse($required, 402);
@@ -131,8 +145,10 @@ class PaymentGate {
   }
 
   /**
-   * The buyer must pay exactly what we ask: same scheme, chain, token, seller
-   * and amount. Addresses compare case-insensitively.
+   * Whether the buyer pays exactly what we ask.
+   *
+   * Same scheme, chain, token, seller and amount. Addresses compare
+   * case-insensitively.
    */
   private function matches(array $accepted, array $requirements): bool {
     foreach (['scheme', 'network', 'amount'] as $k) {

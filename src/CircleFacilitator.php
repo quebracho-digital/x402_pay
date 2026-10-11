@@ -48,27 +48,48 @@ class CircleFacilitator {
       sleep($this->pollDelaySeconds);
       $status = $this->request('GET', "/status/$paymentId", '', 'status', $requirements['network'], $seller);
       if ($status['status'] === 'completed') {
-        return ['success' => TRUE, 'transaction' => $status['transaction'], 'network' => $status['network'] ?? $requirements['network'], 'payer' => $status['payer'] ?? $result['payer'] ?? NULL];
+        return [
+          'success' => TRUE,
+          'transaction' => $status['transaction'],
+          'network' => $status['network'] ?? $requirements['network'],
+          'payer' => $status['payer'] ?? $result['payer'] ?? NULL,
+        ];
       }
       if ($status['status'] === 'failed') {
-        return ['success' => FALSE, 'errorReason' => $status['reason'] ?? 'settlement_failed', 'transaction' => '', 'network' => $requirements['network'], 'payer' => $result['payer'] ?? NULL];
+        return [
+          'success' => FALSE,
+          'errorReason' => $status['reason'] ?? 'settlement_failed',
+          'transaction' => '',
+          'network' => $requirements['network'],
+          'payer' => $result['payer'] ?? NULL,
+        ];
       }
     }
     return $result;
   }
 
+  /**
+   * Sends a payment and its requirements to /verify or /settle.
+   */
   private function call(string $purpose, array $payload, array $requirements, Signer $seller): array {
     $body = json_encode(['x402Version' => 2, 'paymentPayload' => $payload, 'paymentRequirements' => $requirements], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     return $this->request('POST', "/$purpose", $body, $purpose, $requirements['network'], $seller);
   }
 
+  /**
+   * Calls the facilitator with a seller proof and returns its JSON.
+   */
   private function request(string $method, string $path, string $body, string $purpose, string $network, Signer $seller): array {
     $headers = ['Facilitator-Seller-Proof' => SellerProof::header($seller, $purpose, $method, $body, $network)];
     if ($body !== '') {
       $headers['Content-Type'] = 'application/json';
     }
     try {
-      $response = $this->httpClient->request($method, $this->base . $path, ['headers' => $headers, 'body' => $body, 'timeout' => 30]);
+      $response = $this->httpClient->request($method, $this->base . $path, [
+        'headers' => $headers,
+        'body' => $body,
+        'timeout' => 30,
+      ]);
     }
     catch (BadResponseException $e) {
       $error = json_decode((string) $e->getResponse()->getBody(), TRUE) ?: [];

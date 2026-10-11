@@ -36,6 +36,10 @@ final class Eip712 {
    *   Any of name, version, chainId, verifyingContract, salt.
    * @param array $types
    *   Struct name => list of ['name' => …, 'type' => …], as in viem/ethers.
+   * @param string $primaryType
+   *   The struct the message is.
+   * @param array $message
+   *   Field name => value.
    */
   public static function hash(array $domain, array $types, string $primaryType, array $message): string {
     $types['EIP712Domain'] = [];
@@ -48,7 +52,7 @@ final class Eip712 {
   }
 
   /**
-   * hashStruct as raw 32 bytes.
+   * The hashStruct of a value, as raw 32 bytes.
    */
   private static function hashStruct(string $type, array $data, array $types): string {
     $encoded = self::raw(self::keccak(self::encodeType($type, $types)));
@@ -62,7 +66,7 @@ final class Eip712 {
   }
 
   /**
-   * "Primary(fields)" followed by every referenced struct, sorted by name.
+   * The type string: "Primary(fields)", then every referenced struct by name.
    */
   private static function encodeType(string $primary, array $types): string {
     $deps = self::dependencies($primary, $types);
@@ -75,6 +79,9 @@ final class Eip712 {
     return $out;
   }
 
+  /**
+   * Every struct type that a type references, recursively.
+   */
   private static function dependencies(string $type, array $types, array $found = []): array {
     if (isset($found[$type]) || !isset($types[$type])) {
       return $found;
@@ -107,6 +114,9 @@ final class Eip712 {
     };
   }
 
+  /**
+   * An integer given as decimal or 0x-prefixed hex.
+   */
   private static function number(mixed $value): \GMP {
     $value = (string) $value;
     return str_starts_with($value, '0x') ? gmp_init(substr($value, 2), 16) : gmp_init($value, 10);
@@ -124,7 +134,7 @@ final class Eip712 {
   }
 
   /**
-   * 0x-hex to raw bytes.
+   * Converts 0x-hex to raw bytes.
    */
   public static function raw(string $hex): string {
     $hex = str_starts_with($hex, '0x') ? substr($hex, 2) : $hex;

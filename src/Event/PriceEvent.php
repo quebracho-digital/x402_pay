@@ -13,8 +13,10 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
- * Before charging: change the price, make it free, or deny it; choose who
- * is paid and say what the buyer gets.
+ * Before charging: the price, the seller and what the buyer gets.
+ *
+ * Change the price, make it free, or deny it; choose who is paid and say
+ * what the buyer gets.
  *
  * Dispatched on every sale, with the whole context: the entity (already in
  * the request's language), what is sold (the view mode), who asks and how.
@@ -23,12 +25,24 @@ use Symfony\Contracts\EventDispatcher\Event;
  */
 final class PriceEvent extends Event {
 
+  /**
+   * Whether the sale was refused.
+   */
   private bool $denied = FALSE;
 
+  /**
+   * The wallet paid, or NULL for the field's key.
+   */
   private ?Signer $seller = NULL;
 
+  /**
+   * What the buyer gets, as a MIME type.
+   */
   private string $mimeType = 'text/markdown';
 
+  /**
+   * How long the buyer's payment stays valid, in seconds.
+   */
   private int $timeout = Networks::TIMEOUT;
 
   public function __construct(
@@ -48,23 +62,38 @@ final class PriceEvent extends Event {
     return $this->price;
   }
 
+  /**
+   * Charges this price in dollars, e.g. "0.01", even if it was free.
+   */
   public function setPrice(string $usd): void {
     $this->price = $usd;
     $this->free = FALSE;
   }
 
+  /**
+   * Whether this sale costs nothing.
+   */
   public function isFree(): bool {
     return $this->free;
   }
 
+  /**
+   * Delivers without charging.
+   */
   public function makeFree(): void {
     $this->free = TRUE;
   }
 
+  /**
+   * Whether this sale was refused.
+   */
   public function isDenied(): bool {
     return $this->denied;
   }
 
+  /**
+   * Refuses the sale: the buyer gets a 403; later listeners are skipped.
+   */
   public function deny(): void {
     $this->denied = TRUE;
     $this->stopPropagation();
@@ -79,18 +108,25 @@ final class PriceEvent extends Event {
     $this->seller = $seller;
   }
 
+  /**
+   * The wallet paid for this sale, or NULL for the field's key.
+   */
   public function seller(): ?Signer {
     return $this->seller;
   }
 
   /**
-   * What the buyer gets, announced in the 402: markdown unless delivered
-   * otherwise (see DeliveryEvent).
+   * Says what the buyer gets, announced in the 402.
+   *
+   * Markdown unless delivered otherwise (see DeliveryEvent).
    */
   public function setMimeType(string $mimeType): void {
     $this->mimeType = $mimeType;
   }
 
+  /**
+   * What the buyer gets, as a MIME type.
+   */
   public function mimeType(): string {
     return $this->mimeType;
   }
@@ -106,6 +142,9 @@ final class PriceEvent extends Event {
     $this->timeout = $seconds;
   }
 
+  /**
+   * How long the buyer's payment stays valid, in seconds.
+   */
   public function timeout(): int {
     return $this->timeout;
   }

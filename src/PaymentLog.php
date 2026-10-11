@@ -21,8 +21,10 @@ class PaymentLog {
   ) {}
 
   /**
+   * Records one sale attempt.
+   *
    * @param array $entry
-   *   resource, network, amount, pay_to, payer, status, transaction,
+   *   Keys: resource, network, amount, pay_to, payer, status, transaction,
    *   handler_status, error.
    */
   public function record(array $entry): void {

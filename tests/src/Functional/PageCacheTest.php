@@ -25,10 +25,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 final class PageCacheTest extends BrowserTestBase {
 
+  /**
+   * {@inheritdoc}
+   */
   protected static $modules = ['x402_pay', 'key', 'entity_test', 'page_cache', 'dynamic_page_cache', 'field_ui'];
 
+  /**
+   * {@inheritdoc}
+   */
   protected $defaultTheme = 'stark';
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     Key::create([
@@ -39,9 +48,17 @@ final class PageCacheTest extends BrowserTestBase {
       'key_provider_settings' => ['key_value' => '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'],
     ])->save();
     FieldStorageConfig::create(['field_name' => 'field_price', 'entity_type' => 'entity_test', 'type' => 'x402_price'])->save();
-    FieldConfig::create(['field_name' => 'field_price', 'entity_type' => 'entity_test', 'bundle' => 'entity_test', 'settings' => ['key_id' => 'seller']])->save();
+    FieldConfig::create([
+      'field_name' => 'field_price',
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'settings' => ['key_id' => 'seller'],
+    ])->save();
   }
 
+  /**
+   * Repeated browser visits do not cache the page for agents.
+   */
   public function testRepeatedBrowserVisitsDoNotCacheThePageForAgents(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view test entity')->save();
     $entity = EntityTest::create(['name' => 'Terms of X', 'field_price' => ['enabled' => 1]]);
@@ -58,9 +75,17 @@ final class PageCacheTest extends BrowserTestBase {
     $this->assertSession()->statusCodeEquals(402);
   }
 
+  /**
+   * The settings form refuses what another field sells.
+   */
   public function testTheSettingsFormRefusesWhatAnotherFieldSells(): void {
     FieldStorageConfig::create(['field_name' => 'field_summary', 'entity_type' => 'entity_test', 'type' => 'x402_price'])->save();
-    FieldConfig::create(['field_name' => 'field_summary', 'entity_type' => 'entity_test', 'bundle' => 'entity_test', 'settings' => ['key_id' => 'seller', 'view_mode' => 'teaser', 'canonical' => FALSE]])->save();
+    FieldConfig::create([
+      'field_name' => 'field_summary',
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'settings' => ['key_id' => 'seller', 'view_mode' => 'teaser', 'canonical' => FALSE],
+    ])->save();
     $this->drupalLogin($this->drupalCreateUser(['administer entity_test fields', 'administer entity_test content']));
     $form = 'entity_test/structure/entity_test/fields/entity_test.entity_test.field_summary';
 

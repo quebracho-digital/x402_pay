@@ -40,6 +40,9 @@ use Drupal\x402_pay\Signer;
 )]
 class X402PriceItem extends FieldItemBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public static function defaultFieldSettings(): array {
     return [
       'enabled' => TRUE,
@@ -52,6 +55,9 @@ class X402PriceItem extends FieldItemBase {
     ] + parent::defaultFieldSettings();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function propertyDefinitions(FieldStorageDefinitionInterface $field_definition): array {
     return [
       'enabled' => DataDefinition::create('boolean')->setLabel(new TranslatableMarkup('Charge for this')),
@@ -60,10 +66,16 @@ class X402PriceItem extends FieldItemBase {
     ];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function mainPropertyName(): string {
     return 'enabled';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function schema(FieldStorageDefinitionInterface $field_definition): array {
     return [
       'columns' => [
@@ -73,6 +85,9 @@ class X402PriceItem extends FieldItemBase {
     ];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function isEmpty(): bool {
     return $this->enabled === NULL && ($this->amount ?? '') === '';
   }
@@ -80,6 +95,8 @@ class X402PriceItem extends FieldItemBase {
   /**
    * The payable item that sells a view mode of the entity, if any.
    *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity sold.
    * @param string|null $viewMode
    *   NULL: the one sold on the entity's own URL.
    */
@@ -96,6 +113,7 @@ class X402PriceItem extends FieldItemBase {
    * Every payable item of the entity: everything it sells right now.
    *
    * @return self[]
+   *   The items, one per field.
    */
   public static function all(EntityInterface $entity): array {
     $items = [];
@@ -123,7 +141,10 @@ class X402PriceItem extends FieldItemBase {
         continue;
       }
       if ($other->getSetting('view_mode') === $field->getSetting('view_mode')) {
-        return t('The field %other already sells the %mode view mode.', ['%other' => $other->getLabel(), '%mode' => $field->getSetting('view_mode')]);
+        return t('The field %other already sells the %mode view mode.', [
+          '%other' => $other->getLabel(),
+          '%mode' => $field->getSetting('view_mode'),
+        ]);
       }
       if ($other->getSetting('canonical') && $field->getSetting('canonical')) {
         return t("The field %other already charges on the entity's own URL.", ['%other' => $other->getLabel()]);
@@ -146,6 +167,9 @@ class X402PriceItem extends FieldItemBase {
     return (bool) $this->getSetting('canonical');
   }
 
+  /**
+   * Whether this entity is charged at all: field and entity on.
+   */
   public function isPayable(): bool {
     return $this->getSetting('enabled') && $this->enabled;
   }
@@ -187,6 +211,9 @@ class X402PriceItem extends FieldItemBase {
     return Networks::requirements((string) $this->getSetting('network'), $usd ?? $this->price(), $this->seller()->address());
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function fieldSettingsForm(array $form, FormStateInterface $form_state): array {
     return [
       'enabled' => [
@@ -242,6 +269,9 @@ class X402PriceItem extends FieldItemBase {
     ];
   }
 
+  /**
+   * Form validation: a price the network can charge exactly.
+   */
   public static function validateAmount(array $element, FormStateInterface $form_state): void {
     $network = Networks::ALL[$form_state->getValue(['settings', 'network'])] ?? reset(Networks::ALL);
     try {
@@ -252,6 +282,9 @@ class X402PriceItem extends FieldItemBase {
     }
   }
 
+  /**
+   * Form validation: no other field sells this view mode.
+   */
   public static function validateConflict(array $element, FormStateInterface $form_state): void {
     $field = clone $form_state->getFormObject()->getEntity();
     $field->setSetting('view_mode', $form_state->getValue(['settings', 'view_mode']));
@@ -261,6 +294,9 @@ class X402PriceItem extends FieldItemBase {
     }
   }
 
+  /**
+   * Form validation: the key holds a usable EVM private key.
+   */
   public static function validateKey(array $element, FormStateInterface $form_state): void {
     $key = \Drupal::service('key.repository')->getKey((string) $element['#value']);
     try {

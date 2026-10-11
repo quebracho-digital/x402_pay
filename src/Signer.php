@@ -15,6 +15,9 @@ use Mdanter\Ecc\Curves\SecgCurve;
  */
 final class Signer {
 
+  /**
+   * The private key, as raw 32 bytes.
+   */
   private readonly string $key;
 
   public function __construct(#[\SensitiveParameter] string $privateKey) {
@@ -57,6 +60,9 @@ final class Signer {
     return '0x' . $out;
   }
 
+  /**
+   * Shows the address only: never the private key.
+   */
   public function __debugInfo(): array {
     return ['address' => $this->address()];
   }

@@ -15,6 +15,9 @@ use PHPUnit\Framework\Attributes\Group;
 #[Group('x402_pay')]
 final class NetworksTest extends UnitTestCase {
 
+  /**
+   * Prices in dollars and their atomic units.
+   */
   public static function prices(): array {
     return [
       'a cent' => ['0.01', '10000'],
@@ -25,11 +28,17 @@ final class NetworksTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * Converts dollars to atomic units.
+   */
   #[DataProvider('prices')]
   public function testConvertsDollarsToAtomicUnits(string $usd, string $atomic): void {
     $this->assertSame($atomic, Networks::atomic($usd, 6));
   }
 
+  /**
+   * Prices the network cannot charge exactly.
+   */
   public static function badPrices(): array {
     return [
       'more decimals than the token' => ['0.0000001'],
@@ -43,12 +52,18 @@ final class NetworksTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * Refuses prices it cannot charge exactly.
+   */
   #[DataProvider('badPrices')]
   public function testRefusesPricesItCannotChargeExactly(string $usd): void {
     $this->expectException(\InvalidArgumentException::class);
     Networks::atomic($usd, 6);
   }
 
+  /**
+   * Requirements for arc testnet.
+   */
   public function testRequirementsForArcTestnet(): void {
     $this->assertSame([
       'scheme' => 'exact',
@@ -61,10 +76,16 @@ final class NetworksTest extends UnitTestCase {
     ], Networks::requirements('eip155:5042002', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'));
   }
 
+  /**
+   * The timeout can be longer.
+   */
   public function testTheTimeoutCanBeLonger(): void {
     $this->assertSame(600, Networks::requirements('eip155:5042002', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 600)['maxTimeoutSeconds']);
   }
 
+  /**
+   * Refuses an unknown network.
+   */
   public function testRefusesAnUnknownNetwork(): void {
     $this->expectException(\InvalidArgumentException::class);
     Networks::requirements('eip155:1', '0.01', '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');

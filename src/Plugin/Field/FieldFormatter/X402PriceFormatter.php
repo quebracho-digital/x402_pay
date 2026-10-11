@@ -20,6 +20,9 @@ use Drupal\x402_pay\Networks;
 )]
 class X402PriceFormatter extends FormatterBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public function viewElements(FieldItemListInterface $items, $langcode): array {
     $elements = [];
     foreach ($items as $delta => $item) {

@@ -30,12 +30,19 @@ final class SellerProof {
   /**
    * Builds the header value (base64url JSON envelope).
    *
+   * @param \Drupal\x402_pay\Signer $seller
+   *   The payTo key.
    * @param string $purpose
-   *   verify, settle or status: must match the route called.
+   *   One of verify, settle or status: must match the route called.
+   * @param string $method
+   *   The HTTP method of the call.
+   * @param string $body
+   *   The exact body sent: its hash is signed.
    * @param string $network
-   *   CAIP-2, e.g. eip155:5042002. Its chain id is the domain's.
+   *   A CAIP-2 id, e.g. eip155:5042002. Its chain id is the domain's.
    * @param string|null $nonce
-   *   32 random bytes as 0x-hex; generated when omitted (tests pass one).
+   *   Thirty-two random bytes as 0x-hex; generated when omitted (tests pass
+   *   one).
    * @param int|null $issuedAt
    *   Unix time; now when omitted. The proof lives 5 minutes, Circle's max.
    */
