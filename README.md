@@ -49,8 +49,10 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 - **`x402_pay_commerce`**: a Drupal Commerce payment gateway on top of it, so
   a person can check out in USDC.
 
-`scripts/buy.mjs <url>` is a buyer agent in one file: it reads the 402,
-signs the payment and prints what it bought.
+`scripts/buy.mjs <url> [max USDC] [JSON input]` is a buyer agent in one
+file: it reads the 402, signs the payment and prints what it bought, where
+the time went (with the seller's `Server-Timing`) and the seller's balance
+on chain before and after. With a JSON input it POSTs it, for services.
 
 Arc testnet only (`eip155:5042002`). Wallet credentials go through the `key`
 module from an environment variable, never in exportable config.
