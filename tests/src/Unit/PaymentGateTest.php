@@ -167,6 +167,21 @@ final class PaymentGateTest extends UnitTestCase {
     $this->assertSame(self::TX, $settlement['transaction']);
   }
 
+  public function testReportsHowLongEachStepTook(): void {
+    $this->valid();
+    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002', 'payer' => self::BUYER]);
+
+    $timing = $this->handle($this->request($this->payment()))->headers->get('Server-Timing');
+
+    $this->assertMatchesRegularExpression('/^x402-verify;dur=\d+(\.\d+)?, x402-handler;dur=\d+(\.\d+)?, x402-settle;dur=\d+(\.\d+)?$/', (string) $timing);
+  }
+
+  public function testReportsTheStepsThatRanWhenDeliveryFails(): void {
+    $this->valid();
+    $timing = $this->handle($this->request($this->payment()), 502)->headers->get('Server-Timing');
+    $this->assertMatchesRegularExpression('/^x402-verify;dur=[\d.]+, x402-handler;dur=[\d.]+$/', (string) $timing);
+  }
+
   public function testFailedDeliveryIsNeverSettled(): void {
     $this->valid();
     $this->facilitator->expects($this->never())->method('settle');

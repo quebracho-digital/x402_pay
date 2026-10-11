@@ -13,9 +13,15 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * verify → run the handler → 2xx? settle → hand over the body only once the
  * money settled. A failed handler costs the buyer nothing; a failed
- * settlement gets the buyer nothing.
+ * settlement gets the buyer nothing. Each paid response says how long each
+ * step took, in a Server-Timing header.
  */
 class PaymentGate {
+
+  /**
+   * Milliseconds per step of the current payment, for Server-Timing.
+   */
+  private array $timings = [];
 
   public function __construct(
     private readonly CircleFacilitator $facilitator,
@@ -49,17 +55,18 @@ class PaymentGate {
       return $this->required($requirements, $resource, 'The payment does not match the requirements');
     }
 
+    $this->timings = [];
     try {
-      $verified = $this->facilitator->verify($payment, $requirements, $seller);
+      $verified = $this->timed('verify', fn() => $this->facilitator->verify($payment, $requirements, $seller));
     }
     catch (FacilitatorException $e) {
-      return new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502);
+      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
     }
     if (empty($verified['isValid'])) {
-      return $this->required($requirements, $resource, $verified['invalidReason'] ?? 'invalid_payment');
+      return $this->withTimings($this->required($requirements, $resource, $verified['invalidReason'] ?? 'invalid_payment'));
     }
 
-    $response = $handler();
+    $response = $this->timed('handler', $handler);
     $entry = [
       'resource' => $resource['url'],
       'network' => $requirements['network'],
@@ -71,21 +78,21 @@ class PaymentGate {
     ];
     if (!$response->isSuccessful()) {
       $this->log->record(['status' => 'not_settled'] + $entry);
-      return $response;
+      return $this->withTimings($response);
     }
 
     try {
-      $settlement = $this->facilitator->settle($payment, $requirements, $seller);
+      $settlement = $this->timed('settle', fn() => $this->facilitator->settle($payment, $requirements, $seller));
     }
     catch (FacilitatorException $e) {
       $this->log->record(['status' => 'failed', 'error' => $e->getMessage()] + $entry);
-      return new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502);
+      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
     }
     if (empty($settlement['success'])) {
       $this->log->record(['status' => 'failed', 'error' => $settlement['errorReason'] ?? NULL] + $entry);
       $failed = new JsonResponse(['error' => $settlement['errorReason'] ?? 'settlement_failed'], 402);
       $failed->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode($settlement));
-      return $failed;
+      return $this->withTimings($failed);
     }
 
     $this->log->record(['status' => 'settled', 'transaction' => $settlement['transaction'], 'payer' => $settlement['payer'] ?? $entry['payer']] + $entry);
@@ -95,6 +102,24 @@ class PaymentGate {
       'network' => $settlement['network'] ?? $requirements['network'],
       'payer' => $settlement['payer'] ?? $entry['payer'],
     ]));
+    return $this->withTimings($response);
+  }
+
+  /**
+   * Runs one step and keeps how long it took, even when it throws.
+   */
+  private function timed(string $step, callable $run): mixed {
+    $start = hrtime(TRUE);
+    try {
+      return $run();
+    }
+    finally {
+      $this->timings[$step] = round((hrtime(TRUE) - $start) / 1e6, 1);
+    }
+  }
+
+  private function withTimings(Response $response): Response {
+    $response->headers->set('Server-Timing', implode(', ', array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($this->timings), $this->timings)));
     return $response;
   }
 
