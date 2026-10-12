@@ -12,6 +12,7 @@
   "type": "module",
   "private": "true",
   "dependencies": {
+    "undici": "^7.30.0",
     "viem": "^2.57.4"
   }
 }
