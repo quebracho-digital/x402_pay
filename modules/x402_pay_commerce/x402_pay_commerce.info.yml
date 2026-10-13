@@ -1,9 +1,0 @@
-name: 'x402 Pay — Commerce'
-type: module
-description: 'Drupal Commerce payment gateway: checkout paid in USDC on Arc over x402, by a person or an agent.'
-core_version_requirement: ^11.1 || ^12
-package: Payments
-lifecycle: experimental
-dependencies:
-  - x402_pay:x402_pay
-  - commerce:commerce_payment

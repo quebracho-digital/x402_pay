@@ -54,8 +54,8 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   payment verified, a subscriber can answer instead of the markdown, e.g.
   call a service with the request's input (any method, POST included). A
   response other than 2xx is never charged.
-- **`x402_pay_commerce`**: a Drupal Commerce payment gateway on top of it, so
-  a person can check out in USDC.
+- **Coming:** `x402_pay_commerce`, a Drupal Commerce payment gateway on top
+  of it, so a person can check out in USDC.
 
 `scripts/buy.mjs <url> [max USDC] [JSON input]` is a buyer agent in one
 file: it reads the 402, signs the payment and prints what it bought, where

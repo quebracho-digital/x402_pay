@@ -1,6 +1,6 @@
 {
   "name": "drupal/x402_pay",
-  "description": "HTTP 402 (x402) micropayments and a Drupal Commerce gateway in USDC on Arc.",
+  "description": "HTTP 402 (x402) micropayments in USDC on Arc: charge for any Drupal response, settled by Circle or by the site itself.",
   "type": "drupal-module",
   "license": "GPL-2.0-or-later",
   "require": {
@@ -10,8 +10,5 @@
     "kornrunner/keccak": "^1.1",
     "kornrunner/secp256k1": "^0.4",
     "league/html-to-markdown": "^5.1"
-  },
-  "suggest": {
-    "drupal/commerce": "Needed by the x402_pay_commerce gateway."
   }
 }
