@@ -16,7 +16,7 @@ services:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator']
+    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']
@@ -25,6 +25,10 @@ services:
     arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch']
     tags:
       - { name: event_subscriber }
+  x402_pay.page_cache_request_policy:
+    class: Drupal\x402_pay\PageCache\AgentRequestPolicy
+    tags:
+      - { name: page_cache_request_policy }
   x402_pay.sweeper:
     class: Drupal\x402_pay\Sweeper
     arguments:

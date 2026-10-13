@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\x402_pay\Event\PaymentEvent;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,6 +29,7 @@ class PaymentGate {
     private readonly CircleFacilitator $facilitator,
     private readonly PaymentLog $log,
     private readonly ?ChainFacilitator $chain = NULL,
+    private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
   ) {}
 
   /**
@@ -85,7 +88,7 @@ class PaymentGate {
       'transaction' => NULL,
     ];
     if (!$response->isSuccessful()) {
-      $this->log->record(['status' => 'not_settled'] + $entry);
+      $this->record($request, ['status' => 'not_settled'] + $entry);
       return $this->withTimings($response);
     }
 
@@ -93,17 +96,17 @@ class PaymentGate {
       $settlement = $this->timed('settle', fn() => $facilitator->settle($payment, $requirements, $seller));
     }
     catch (FacilitatorException $e) {
-      $this->log->record(['status' => 'failed', 'error' => $e->getMessage()] + $entry);
+      $this->record($request, ['status' => 'failed', 'error' => $e->getMessage()] + $entry);
       return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
     }
     if (empty($settlement['success'])) {
-      $this->log->record(['status' => 'failed', 'error' => $settlement['errorReason'] ?? NULL] + $entry);
+      $this->record($request, ['status' => 'failed', 'error' => $settlement['errorReason'] ?? NULL] + $entry);
       $failed = new JsonResponse(['error' => $settlement['errorReason'] ?? 'settlement_failed'], 402);
       $failed->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode($settlement));
       return $this->withTimings($failed);
     }
 
-    $this->log->record([
+    $this->record($request, [
       'status' => 'settled',
       'transaction' => $settlement['transaction'],
       'payer' => $settlement['payer'] ?? $entry['payer'],
@@ -115,6 +118,14 @@ class PaymentGate {
       'payer' => $settlement['payer'] ?? $entry['payer'],
     ]));
     return $this->withTimings($response);
+  }
+
+  /**
+   * Logs an outcome, then tells whoever listens (PaymentEvent).
+   */
+  private function record(Request $request, array $entry): void {
+    $this->log->record($entry);
+    $this->eventDispatcher?->dispatch(new PaymentEvent($entry, $request));
   }
 
   /**

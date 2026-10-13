@@ -128,6 +128,8 @@ class Delivery {
     }
     $html = (string) $this->renderer->renderInIsolation($build);
     $body = (new HtmlConverter(['strip_tags' => TRUE, 'remove_nodes' => 'script style', 'hard_break' => TRUE]))->convert($html);
+    // Field wrappers leave runs of blank (or space-only) lines: one is enough.
+    $body = preg_replace('/\n(?:[ \t\x{a0}]*\n){2,}/u', "\n\n", $body);
     return new Response(trim('# ' . $entity->label() . "\n\n" . $body) . "\n", 200, ['Content-Type' => 'text/markdown; charset=utf-8']);
   }
 

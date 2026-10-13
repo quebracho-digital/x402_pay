@@ -8,12 +8,14 @@ use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\CircleFacilitator;
+use Drupal\x402_pay\Event\PaymentEvent;
 use Drupal\x402_pay\FacilitatorException;
 use Drupal\x402_pay\PaymentGate;
 use Drupal\x402_pay\PaymentHeaders;
 use Drupal\x402_pay\PaymentLog;
 use Drupal\x402_pay\Signer;
 use PHPUnit\Framework\MockObject\MockObject;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -48,6 +50,12 @@ final class PaymentGateTest extends UnitTestCase {
    */
   private Signer $seller;
   /**
+   * The payment events dispatched.
+   *
+   * @var \Drupal\x402_pay\Event\PaymentEvent[]
+   */
+  private array $events = [];
+  /**
    * How many times the handler ran.
    */
   private int $handlerCalls = 0;
@@ -59,7 +67,11 @@ final class PaymentGateTest extends UnitTestCase {
     parent::setUp();
     $this->facilitator = $this->createMock(CircleFacilitator::class);
     $this->log = $this->createMock(PaymentLog::class);
-    $this->gate = new PaymentGate($this->facilitator, $this->log);
+    $dispatcher = new EventDispatcher();
+    $dispatcher->addListener(PaymentEvent::class, function (PaymentEvent $event) {
+      $this->events[] = $event;
+    });
+    $this->gate = new PaymentGate($this->facilitator, $this->log, NULL, $dispatcher);
     $this->seller = new Signer('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
   }
 
@@ -235,6 +247,29 @@ final class PaymentGateTest extends UnitTestCase {
     $settlement = PaymentHeaders::decode($response->headers->get('PAYMENT-RESPONSE'));
     $this->assertTrue($settlement['success']);
     $this->assertSame(self::TX, $settlement['transaction']);
+  }
+
+  /**
+   * Every outcome in the log is also an event, the same entry.
+   */
+  public function testEachOutcomeIsAnEvent(): void {
+    $this->valid();
+    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'payer' => self::BUYER]);
+    $this->handle($this->request($this->payment()));
+    $this->handle($this->request($this->payment()), 502);
+
+    $this->assertSame(['settled', 'not_settled'], array_map(fn(PaymentEvent $e) => $e->status(), $this->events));
+    $this->assertSame(self::TX, $this->events[0]->entry['transaction']);
+    $this->assertSame([], $this->unpaidEvents());
+  }
+
+  /**
+   * An unpaid request is no outcome: no event.
+   */
+  private function unpaidEvents(): array {
+    $this->events = [];
+    $this->handle($this->request(NULL));
+    return $this->events;
   }
 
   /**

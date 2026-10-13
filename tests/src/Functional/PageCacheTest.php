@@ -28,7 +28,7 @@ final class PageCacheTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['x402_pay', 'key', 'entity_test', 'page_cache', 'dynamic_page_cache', 'field_ui'];
+  protected static $modules = ['x402_pay', 'key', 'entity_test', 'page_cache', 'dynamic_page_cache', 'field_ui', 'jsonapi', 'serialization'];
 
   /**
    * {@inheritdoc}
@@ -73,6 +73,50 @@ final class PageCacheTest extends BrowserTestBase {
     }
     $this->drupalGet($entity->toUrl(), [], ['Accept' => '*/*']);
     $this->assertSession()->statusCodeEquals(402);
+  }
+
+  /**
+   * Markdown comes from the gate alone: sold entities charge on every route
+   * that shows them, free ones are converted, with the caches warm.
+   */
+  public function testMarkdownComesFromTheGateAlone(): void {
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view test entity')->save();
+    $free = EntityTest::create(['name' => 'Free notes', 'field_price' => ['enabled' => 0]]);
+    $free->save();
+    $sold = EntityTest::create(['name' => 'Terms of X', 'field_price' => ['enabled' => 1]]);
+    $sold->save();
+    // Browsers first: the page cache holds whatever it may.
+    foreach ([$free, $sold] as $entity) {
+      $this->drupalGet($entity->toUrl(), [], ['Accept' => 'text/html']);
+      $this->drupalGet($entity->toUrl(), [], ['Accept' => 'text/html']);
+    }
+    $this->assertSession()->responseHeaderContains('Vary', 'Accept');
+
+    $this->drupalGet($free->toUrl(), [], ['Accept' => 'text/markdown']);
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->responseHeaderContains('Content-Type', 'text/markdown');
+    $this->assertStringStartsWith('# Free notes', $this->getSession()->getPage()->getContent());
+    // And the page cache did not keep the markdown for browsers.
+    $this->drupalGet($free->toUrl(), [], ['Accept' => 'text/html']);
+    $this->assertSession()->responseHeaderContains('Content-Type', 'text/html');
+    $this->assertSession()->responseHeaderContains('Link', 'type="text/markdown"');
+
+    // Sold: by Accept, by ?_format=, and through JSON:API, never free.
+    $this->drupalGet($sold->toUrl(), [], ['Accept' => 'text/markdown']);
+    $this->assertSession()->statusCodeEquals(402);
+    $this->drupalGet($sold->toUrl('canonical', ['query' => ['_format' => 'markdown']]), [], ['Accept' => '*/*']);
+    $this->assertNotEquals(200, $this->getSession()->getStatusCode());
+    $this->drupalGet('jsonapi/entity_test/entity_test/' . $sold->uuid(), [], ['Accept' => 'application/vnd.api+json']);
+    $this->assertSession()->statusCodeEquals(402);
+    $this->drupalGet('jsonapi/entity_test/entity_test/' . $free->uuid(), [], ['Accept' => 'application/vnd.api+json']);
+    $this->assertSession()->statusCodeEquals(200);
+
+    // What a visitor cannot see is neither sold nor converted.
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->revokePermission('view test entity')->save();
+    $this->drupalGet($free->toUrl(), [], ['Accept' => 'text/markdown']);
+    $this->assertSession()->statusCodeEquals(403);
+    $this->drupalGet($sold->toUrl(), [], ['Accept' => 'text/markdown']);
+    $this->assertSession()->statusCodeEquals(403);
   }
 
   /**

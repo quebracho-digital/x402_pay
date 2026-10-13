@@ -32,6 +32,17 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   - **What they get:** the fields of that view mode as markdown, under the
     label. Not the entity's template, nor the fields a display cannot
     configure (a node's author and date), nor the price.
+  - **One gate, by entity:** any route that shows an entity it sells (its
+    page, a `.md` path, `?_format=`, JSON:API, REST) answers agents with the
+    sale, so another module cannot hand out for free what is sold. It runs
+    after routing's access check: what a visitor cannot see is never
+    offered, and paying grants nothing beyond view access. Forms and admin
+    pages are left alone.
+- **Markdown for free pages too:** `Accept: text/markdown` on the own URL
+  of an entity that sells nothing there (and whose `full` view mode no field
+  sells) returns that view mode as markdown, announced with a `Link`
+  header. No other module needed. Every entity page says `Vary: Accept`,
+  and the page cache never answers a request for markdown or one that pays.
 - **`/x402/discovery`**: everything the site sells, one item per product,
   in the shape of Circle's Discovery API, so a client written for Circle's
   Agent Marketplace reads it unchanged. Every entity type with the field;
@@ -54,6 +65,10 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
   payment verified, a subscriber can answer instead of the markdown, e.g.
   call a service with the request's input (any method, POST included). A
   response other than 2xx is never charged.
+- **The payment event** (`Drupal\x402_pay\Event\PaymentEvent`): every
+  outcome the log records (`settled`, `not_settled`, `failed`), with the
+  same entry and the request: for accounting, reputation or a notice to the
+  seller.
 - **Coming:** `x402_pay_commerce`, a Drupal Commerce payment gateway on top
   of it, so a person can check out in USDC.
 

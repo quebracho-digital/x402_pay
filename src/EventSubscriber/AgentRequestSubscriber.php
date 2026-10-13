@@ -18,9 +18,20 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Charges agents on an entity's own URL; browsers still get the page.
+ * The one gate for what agents read: charged when sold, markdown when free.
+ *
+ * It decides by entity, not by route or format: any route that carries an
+ * entity it sells (its page, a .md path, ?_format=, JSON:API, REST) answers
+ * agents with the sale, so no other module can hand out for free what is
+ * sold. Browsers still get the page. It runs after routing's access check:
+ * what a visitor cannot see is never offered.
  */
 final class AgentRequestSubscriber implements EventSubscriberInterface {
+
+  /**
+   * The view mode an entity's own URL shows.
+   */
+  private const PAGE = 'full';
 
   public function __construct(
     private readonly Delivery $delivery,
@@ -41,13 +52,29 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Charges an agent on the entity's own URL; browsers pass through.
+   * Sells to an agent what the route shows; or the free page as markdown.
    */
   public function onRequest(RequestEvent $event): void {
-    $entity = $event->isMainRequest() ? $this->entity($event->getRequest()) : NULL;
-    $item = $entity ? X402PriceItem::find($entity) : NULL;
-    if ($item && $this->isAgent($event->getRequest())) {
-      $event->setResponse($this->delivery->charge($event->getRequest(), $entity, $item, TRUE));
+    $request = $event->getRequest();
+    $entity = $event->isMainRequest() && $request->isMethodCacheable() ? $this->entity($request) : NULL;
+    if (!$entity) {
+      return;
+    }
+    $canonical = $this->isCanonical($request);
+    // On its own URL: only what a field sells there (its "canonical"
+    // setting). Elsewhere (JSON:API, REST, a .md path) the route can show
+    // any field, so anything sold is charged.
+    $item = $canonical
+      ? X402PriceItem::find($entity)
+      : X402PriceItem::find($entity) ?? X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::all($entity)[0] ?? NULL;
+    if ($item && $this->isAgent($request)) {
+      $event->setResponse($this->delivery->charge($request, $entity, $item, $canonical));
+    }
+    // Free: nothing sold on this URL, and the page's view mode not sold
+    // elsewhere either.
+    elseif (!$item && $canonical && $this->wantsMarkdown($request) && !X402PriceItem::find($entity, self::PAGE)) {
+      $this->pageCacheKillSwitch->trigger();
+      $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
   }
 
@@ -59,9 +86,20 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    * render cache skips view hooks on its hits.
    */
   public function onResponse(ResponseEvent $event): void {
-    $entity = $event->isMainRequest() ? $this->entity($event->getRequest()) : NULL;
-    $items = $entity ? X402PriceItem::all($entity) : [];
-    if (!$items || !$event->getResponse()->isSuccessful()) {
+    $request = $event->getRequest();
+    $entity = $event->isMainRequest() && $this->isCanonical($request) ? $this->entity($request) : NULL;
+    if (!$entity || !$event->getResponse()->isSuccessful()) {
+      return;
+    }
+    $headers = $event->getResponse()->headers;
+    // One URL, HTML or markdown by Accept: shared caches (a CDN) must know.
+    $headers->set('Vary', 'Accept', FALSE);
+    $items = X402PriceItem::all($entity);
+    if (!$items) {
+      if (!str_starts_with((string) $headers->get('Content-Type'), 'text/markdown')) {
+        $self = $entity->toUrl()->toString(TRUE)->getGeneratedUrl();
+        $headers->set('Link', "<$self>; rel=\"alternate\"; type=\"text/markdown\"", FALSE);
+      }
       return;
     }
     $this->pageCacheKillSwitch->trigger();
@@ -72,19 +110,44 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
         'entity' => $entity->id(),
         'view_mode' => $mode,
       ])->toString(TRUE)->getGeneratedUrl();
-      $event->getResponse()->headers->set('Link', "<$paid>; rel=\"alternate\"; type=\"text/markdown\"; title=\"$mode\"", FALSE);
+      $headers->set('Link', "<$paid>; rel=\"alternate\"; type=\"text/markdown\"; title=\"$mode\"", FALSE);
     }
   }
 
   /**
-   * The entity of a canonical route, if that is the request.
+   * The entity a route shows, if any: its page, a .md path, an API.
+   *
+   * Not on forms nor admin pages (editors' tools), nor on x402's own route,
+   * which sells on its own.
    */
   private function entity(Request $request): ?FieldableEntityInterface {
-    if (!preg_match('/^entity\.(\w+)\.canonical$/', (string) $request->attributes->get('_route'), $m)) {
+    $route = $request->attributes->get('_route_object');
+    if (!$route || $request->attributes->get('_route') === 'x402_pay.entity' || $route->getOption('_admin_route') || $route->hasDefault('_entity_form') || $route->hasDefault('_form')) {
       return NULL;
     }
-    $entity = $request->attributes->get($m[1]);
-    return $entity instanceof FieldableEntityInterface ? $entity : NULL;
+    $names = array_keys($route->getOption('parameters') ?? []);
+    // Canonical routes upcast their entity without declaring it.
+    if (preg_match('/^entity\.(\w+)\.canonical$/', (string) $request->attributes->get('_route'), $m)) {
+      $names[] = $m[1];
+    }
+    foreach ($names as $name) {
+      $value = $request->attributes->get($name);
+      if ($value instanceof FieldableEntityInterface) {
+        return $value;
+      }
+    }
+    return NULL;
+  }
+
+  private function isCanonical(Request $request): bool {
+    return (bool) preg_match('/^entity\.\w+\.canonical$/', (string) $request->attributes->get('_route'));
+  }
+
+  /**
+   * Asked for markdown by name: not a browser, not "anything".
+   */
+  private function wantsMarkdown(Request $request): bool {
+    return str_contains((string) $request->headers->get('Accept'), 'text/markdown');
   }
 
   /**
