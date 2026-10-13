@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\CircleFacilitator;
 use Drupal\x402_pay\Eip712;
 use Drupal\x402_pay\FacilitatorException;
+use Drupal\key\KeyInterface;
+use Drupal\key\KeyRepositoryInterface;
 use Drupal\x402_pay\Signer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
@@ -17,7 +19,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 
 /**
- * Circle's Facilitator Service client, keyless (seller proof) mode.
+ * Circle's Facilitator Service client: keyless (seller proof) and API key.
  */
 #[Group('x402_pay')]
 final class CircleFacilitatorTest extends UnitTestCase {
@@ -48,6 +50,57 @@ final class CircleFacilitatorTest extends UnitTestCase {
     $stack = HandlerStack::create(new MockHandler($responses));
     $stack->push(Middleware::history($this->history));
     return new CircleFacilitator(new Client(['handler' => $stack]), self::BASE, pollDelaySeconds: 0);
+  }
+
+  /**
+   * The same, on a site set to use this Circle API key ('' for a missing one).
+   */
+  private function withApiKey(string $apiKey, Response ...$responses): CircleFacilitator {
+    $stack = HandlerStack::create(new MockHandler($responses));
+    $stack->push(Middleware::history($this->history));
+    $facilitator = ['auth' => 'api_key', 'api_key_id' => 'circle'];
+    $config = $this->getConfigFactoryStub(['x402_pay.settings' => ['facilitator' => $facilitator]]);
+    $key = $this->createMock(KeyInterface::class);
+    $key->method('getKeyValue')->willReturn($apiKey);
+    $keys = $this->createMock(KeyRepositoryInterface::class);
+    $keys->method('getKey')->with('circle')->willReturn($key);
+    return new CircleFacilitator(new Client(['handler' => $stack]), self::BASE, pollDelaySeconds: 0, config: $config, keys: $keys);
+  }
+
+  /**
+   * With an API key: a bearer token, no proof, and payTo needs no key here.
+   */
+  public function testApiKeyReplacesTheProofAndNeedsNoSellerKey(): void {
+    $result = $this->withApiKey('TEST_API_KEY:abc:def', new Response(200, [], '{"isValid":true,"payer":"0xbuyer"}'))
+      ->verify($this->payload(), $this->requirements(), NULL);
+
+    $this->assertTrue($result['isValid']);
+    $request = $this->history[0]['request'];
+    $this->assertSame('Bearer TEST_API_KEY:abc:def', $request->getHeaderLine('Authorization'));
+    $this->assertFalse($request->hasHeader('Facilitator-Seller-Proof'));
+  }
+
+  /**
+   * API key mode with the key missing fails before calling Circle.
+   */
+  public function testApiKeyModeWithoutTheKeyFails(): void {
+    $this->expectException(FacilitatorException::class);
+    $this->expectExceptionMessage('No Circle API key');
+    try {
+      $this->withApiKey('', new Response(200))->settle($this->payload(), $this->requirements(), $this->seller);
+    }
+    finally {
+      $this->assertSame([], $this->history);
+    }
+  }
+
+  /**
+   * Keyless without the payTo key fails before calling Circle.
+   */
+  public function testKeylessWithoutTheSellerKeyFails(): void {
+    $this->expectException(FacilitatorException::class);
+    $this->expectExceptionMessage('needs the payTo key');
+    $this->facilitator(new Response(200))->verify($this->payload(), $this->requirements(), NULL);
   }
 
   /**

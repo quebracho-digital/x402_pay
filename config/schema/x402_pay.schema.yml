@@ -5,6 +5,37 @@ x402_pay.settings:
     agent_user_agents:
       type: string
       label: 'User-Agent pattern for agents (regex, case-insensitive)'
+    facilitator:
+      type: mapping
+      label: 'Facilitator'
+      mapping:
+        auth:
+          type: string
+          label: 'keyless or api_key'
+        api_key_id:
+          type: string
+          label: 'Circle API key (Key module id)'
+    sweep:
+      type: mapping
+      label: 'Sweep seller wallets'
+      mapping:
+        enabled:
+          type: boolean
+          label: 'Sweep on cron'
+        to:
+          type: string
+          label: 'Cold wallet address'
+        keys:
+          type: sequence
+          label: 'Seller keys swept (Key module ids)'
+          sequence:
+            type: string
+        min:
+          type: string
+          label: 'Smallest sweep, in USDC'
+        interval:
+          type: integer
+          label: 'Seconds between sweeps'
 
 field.storage_settings.x402_price:
   type: mapping
@@ -26,6 +57,9 @@ field.field_settings.x402_price:
     key_id:
       type: string
       label: 'Seller key'
+    pay_to:
+      type: string
+      label: 'Seller address, without a key'
     allow_override:
       type: boolean
       label: 'Each entity can set its own price'

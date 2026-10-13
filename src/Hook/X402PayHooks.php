@@ -11,11 +11,22 @@ use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\field\FieldConfigInterface;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
+use Drupal\x402_pay\Sweeper;
 
 /**
  * Hooks for x402 Pay.
  */
 class X402PayHooks {
+
+  public function __construct(private readonly Sweeper $sweeper) {}
+
+  /**
+   * Sweeps the seller wallets to the cold wallet, when on and due.
+   */
+  #[Hook('cron')]
+  public function cron(): void {
+    $this->sweeper->cron();
+  }
 
   /**
    * Refuses a field that would sell what another already sells.

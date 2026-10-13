@@ -54,7 +54,8 @@ class Delivery {
       return $deliver();
     }
     try {
-      $seller = $event->seller() ?? $item->seller();
+      // The event's seller, or its address alone; else the field's.
+      $seller = $event->payTo() !== NULL ? $event->seller() : $item->seller();
       $requirements = $this->requirements($event, $item);
     }
     catch (\RuntimeException | \InvalidArgumentException $e) {
@@ -97,11 +98,10 @@ class Delivery {
    * The PaymentRequirements of a quote.
    *
    * @throws \RuntimeException|\InvalidArgumentException
-   *   No usable seller key, or a price the network cannot charge.
+   *   No usable seller, or a price the network cannot charge.
    */
   public function requirements(PriceEvent $quote, X402PriceItem $item): array {
-    $seller = $quote->seller() ?? $item->seller();
-    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $seller->address(), $quote->timeout());
+    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
   }
 
   /**

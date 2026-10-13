@@ -6,6 +6,9 @@ services:
     arguments: ['x402_pay']
   x402_pay.facilitator:
     class: Drupal\x402_pay\CircleFacilitator
+    arguments:
+      $config: '@config.factory'
+      $keys: '@key.repository'
   x402_pay.log:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
@@ -19,3 +22,9 @@ services:
     arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch']
     tags:
       - { name: event_subscriber }
+  x402_pay.sweeper:
+    class: Drupal\x402_pay\Sweeper
+    arguments:
+      $keys: '@key.repository'
+      $logger: '@logger.channel.x402_pay'
+  Drupal\x402_pay\Sweeper: '@x402_pay.sweeper'

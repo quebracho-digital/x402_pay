@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\Group;
 use Drupal\x402_pay\Eip712;
 use Drupal\x402_pay\SellerProof;
 use Drupal\x402_pay\Signer;
+use Drupal\x402_pay\Transfer;
 
 /**
  * EIP-712 hashing, signing and the seller proof, against viem's output.
@@ -81,6 +82,14 @@ final class SignatureTest extends UnitTestCase {
   public function testRejectsMalformedPrivateKey(): void {
     $this->expectException(\InvalidArgumentException::class);
     new Signer('0x1234');
+  }
+
+  /**
+   * A sweep's signed USDC transfer matches viem byte for byte.
+   */
+  public function testTransferMatchesViem(): void {
+    $t = $this->v['transfer'];
+    $this->assertSame($t['raw'], Transfer::sign(new Signer($this->v['privateKey']), $t));
   }
 
 }

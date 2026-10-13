@@ -5,3 +5,7 @@ set x402 prices:
 access x402 content free:
   title: 'Access x402 content free'
   description: 'Get what agents pay for without paying. The price event can still change it.'
+administer x402 pay:
+  title: 'Administer x402 Pay'
+  description: 'Choose how the site reaches the payment facilitator, and where seller wallets are swept.'
+  restrict access: true

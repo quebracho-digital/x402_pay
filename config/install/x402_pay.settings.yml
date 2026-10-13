@@ -1,3 +1,18 @@
 # Agents that announce themselves. A request also counts as an agent when it
 # sends a PAYMENT-SIGNATURE or does not ask for text/html.
 agent_user_agents: 'GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|anthropic-ai|PerplexityBot|Perplexity-User|Google-Extended|CCBot|Bytespider|Amazonbot|meta-externalagent|cohere-ai|Applebot-Extended'
+# How the market reaches Circle's facilitator. keyless: the trial, each call
+# signed by the seller's own key (so that key must live on this server).
+# api_key: a Circle API key from the Key module; payTo can then be a cold
+# wallet, since nothing here needs to sign for it.
+facilitator:
+  auth: keyless
+  api_key_id: ''
+# Keyless leaves seller keys on this server: cron moves what they collect
+# to a wallet whose key is not here. Arc only: its gas is USDC.
+sweep:
+  enabled: false
+  to: ''
+  keys: []
+  min: '1'
+  interval: 21600

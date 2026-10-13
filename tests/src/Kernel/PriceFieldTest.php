@@ -317,6 +317,43 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * A seller can be an address alone: no key on the site signs for it.
+   *
+   * Announced in the 402, and the facilitator gets no key: with a Circle
+   * API key it needs none.
+   */
+  public function testTheSellerCanBeAnAddressAlone(): void {
+    $cold = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator->expects($this->once())->method('verify')
+      ->with($this->anything(), $this->callback(fn($r) => $r['payTo'] === $cold), NULL)
+      ->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
+    $settled = ['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002'];
+    $facilitator->method('settle')->willReturn($settled);
+    $this->container->set('x402_pay.facilitator', $facilitator);
+    $this->listen(fn(PriceEvent $e) => $e->setPayTo(strtolower($cold)));
+
+    $required = $this->required('/x402/entity_test/1');
+    $this->assertSame($cold, $required['accepts'][0]['payTo']);
+    $response = $this->get('/x402/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($required['accepts'][0])]);
+    $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+  }
+
+  /**
+   * A field without a key sells to its address.
+   */
+  public function testFieldWithoutKeySellsToItsAddress(): void {
+    FieldConfig::loadByName('entity_test', 'entity_test', 'field_price')
+      ->setSetting('key_id', '')
+      ->setSetting('pay_to', '0x70997970c51812dc3a010c7d01b50e0d17dc79c8')
+      ->save();
+    $this->resetFieldCaches();
+    $item = X402PriceItem::find(EntityTest::load(1));
+    $this->assertNull($item->seller());
+    $this->assertSame('0x70997970C51812dc3A010C7d01b50e0d17dc79C8', $item->requirements()['payTo']);
+  }
+
+  /**
    * Slow products give the buyer more time to pay.
    */
   public function testSlowProductsGiveTheBuyerMoreTimeToPay(): void {

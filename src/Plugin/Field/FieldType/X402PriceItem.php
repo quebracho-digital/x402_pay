@@ -13,6 +13,7 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\DataDefinition;
+use Drupal\Core\Url;
 use Drupal\x402_pay\Networks;
 use Drupal\x402_pay\Signer;
 
@@ -20,8 +21,9 @@ use Drupal\x402_pay\Signer;
  * Makes any fieldable entity payable over x402 by adding the field.
  *
  * Each field is one product: a view mode at a price. Its settings hold the
- * price, the network and the seller key; the money goes to the key's own
- * address, so it cannot go to a wallet that does not sign. Each entity can
+ * price, the network and who is paid: the seller key, whose own address
+ * gets the money, or, with a Circle API key, just an address (a cold
+ * wallet), so no key that holds money lives on the site. Each entity can
  * switch charging off and, when the field allows it, set its own price; a
  * translatable field gives each translation its own. A bundle can have
  * several fields, each with its own view mode, and at most one of them
@@ -49,6 +51,7 @@ class X402PriceItem extends FieldItemBase {
       'amount' => '0.01',
       'network' => array_key_first(Networks::ALL),
       'key_id' => '',
+      'pay_to' => '',
       'allow_override' => FALSE,
       'view_mode' => 'full',
       'canonical' => TRUE,
@@ -185,11 +188,17 @@ class X402PriceItem extends FieldItemBase {
   /**
    * The seller's key, from the Key module.
    *
+   * NULL when the field sells to an address alone.
+   *
    * @throws \RuntimeException
-   *   No key configured, or not an EVM private key.
+   *   A key named but missing, or not an EVM private key.
    */
-  public function seller(): Signer {
-    $key = \Drupal::service('key.repository')->getKey((string) $this->getSetting('key_id'));
+  public function seller(): ?Signer {
+    $id = (string) $this->getSetting('key_id');
+    if ($id === '') {
+      return NULL;
+    }
+    $key = \Drupal::service('key.repository')->getKey($id);
     if (!$key) {
       throw new \RuntimeException('The x402 price field has no seller key.');
     }
@@ -202,13 +211,27 @@ class X402PriceItem extends FieldItemBase {
   }
 
   /**
+   * The address paid: the key's own, else the field's address.
+   *
+   * @throws \RuntimeException
+   *   Neither a usable key nor an address.
+   */
+  public function payTo(): string {
+    if ($seller = $this->seller()) {
+      return $seller->address();
+    }
+    $address = (string) $this->getSetting('pay_to');
+    return preg_match('/^0x[0-9a-fA-F]{40}$/', $address) ? Signer::checksum($address) : throw new \RuntimeException('The x402 price field has no seller key nor address.');
+  }
+
+  /**
    * What the buyer must pay, as one x402 PaymentRequirements.
    *
    * @param string|null $usd
    *   The price to charge, e.g. after the price event; the field's when NULL.
    */
   public function requirements(?string $usd = NULL): array {
-    return Networks::requirements((string) $this->getSetting('network'), $usd ?? $this->price(), $this->seller()->address());
+    return Networks::requirements((string) $this->getSetting('network'), $usd ?? $this->price(), $this->payTo());
   }
 
   /**
@@ -240,10 +263,19 @@ class X402PriceItem extends FieldItemBase {
       'key_id' => [
         '#type' => 'key_select',
         '#title' => $this->t('Seller key'),
-        '#description' => $this->t("The seller wallet's private key, kept in the Key module (an environment variable, never exportable config). Payments go to this key's address."),
+        '#description' => $this->t("The seller wallet's private key, kept in the Key module (an environment variable, never exportable config). Payments go to this key's address. Leave empty to sell to an address alone."),
+        '#empty_option' => $this->t('- None: an address alone -'),
         '#default_value' => $this->getSetting('key_id'),
-        '#required' => TRUE,
         '#element_validate' => [[static::class, 'validateKey']],
+      ],
+      'pay_to' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Seller address'),
+        '#description' => $this->t('Without a key: the wallet paid, e.g. a cold wallet whose key is not on this site. Needs a Circle API key in the x402 settings, since the keyless trial signs every sale with the seller key.'),
+        '#default_value' => $this->getSetting('pay_to'),
+        '#maxlength' => 42,
+        '#element_validate' => [[static::class, 'validatePayTo']],
+        '#states' => ['visible' => [':input[name="settings[key_id]"]' => ['value' => '']]],
       ],
       'allow_override' => [
         '#type' => 'checkbox',
@@ -295,15 +327,33 @@ class X402PriceItem extends FieldItemBase {
   }
 
   /**
-   * Form validation: the key holds a usable EVM private key.
+   * Form validation: no key, or one that holds a usable EVM private key.
    */
   public static function validateKey(array $element, FormStateInterface $form_state): void {
+    if ((string) $element['#value'] === '') {
+      return;
+    }
     $key = \Drupal::service('key.repository')->getKey((string) $element['#value']);
     try {
       new Signer(trim((string) $key?->getKeyValue()));
     }
     catch (\InvalidArgumentException) {
       $form_state->setError($element, t('The key must hold an EVM private key: 0x followed by 64 hex characters.'));
+    }
+  }
+
+  /**
+   * Form validation: without a key, an address and a Circle API key.
+   */
+  public static function validatePayTo(array $element, FormStateInterface $form_state): void {
+    if ((string) $form_state->getValue(['settings', 'key_id']) !== '') {
+      return;
+    }
+    if (!preg_match('/^0x[0-9a-fA-F]{40}$/', trim((string) $element['#value']))) {
+      $form_state->setError($element, t('Choose a seller key, or give the address paid: 0x followed by 40 hex characters.'));
+    }
+    elseif (\Drupal::config('x402_pay.settings')->get('facilitator.auth') !== 'api_key') {
+      $form_state->setError($element, t('Selling to an address alone needs a Circle API key: set it in the <a href=":url">x402 settings</a>, or choose a seller key.', [':url' => Url::fromRoute('x402_pay.settings')->toString()]));
     }
   }
 

@@ -36,6 +36,11 @@ final class PriceEvent extends Event {
   private ?Signer $seller = NULL;
 
   /**
+   * The address paid when no key here signs for it.
+   */
+  private ?string $payTo = NULL;
+
+  /**
    * What the buyer gets, as a MIME type.
    */
   private string $mimeType = 'text/markdown';
@@ -106,13 +111,34 @@ final class PriceEvent extends Event {
    */
   public function setSeller(Signer $seller): void {
     $this->seller = $seller;
+    $this->payTo = NULL;
   }
 
   /**
-   * The wallet paid for this sale, or NULL for the field's key.
+   * The seller's address alone, when not the field's.
+   *
+   * A wallet whose key is not on this site. Needs a Circle API key (see
+   * CircleFacilitator).
+   */
+  public function setPayTo(string $address): void {
+    $this->payTo = Signer::checksum($address);
+    $this->seller = NULL;
+  }
+
+  /**
+   * The key of the wallet paid.
+   *
+   * NULL for the field's, or for an address set alone.
    */
   public function seller(): ?Signer {
     return $this->seller;
+  }
+
+  /**
+   * The address paid for this sale, or NULL for the field's.
+   */
+  public function payTo(): ?string {
+    return $this->payTo ?? $this->seller?->address();
   }
 
   /**

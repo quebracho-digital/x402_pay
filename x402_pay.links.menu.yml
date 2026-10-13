@@ -1,0 +1,5 @@
+x402_pay.settings:
+  title: 'x402 Pay'
+  description: 'The payment facilitator and the seller wallets.'
+  parent: system.admin_config_services
+  route_name: x402_pay.settings

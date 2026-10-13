@@ -18,3 +18,11 @@ x402_pay.discovery:
   requirements:
     # Public: the catalogue lists only what the visitor can see and buy.
     _access: 'TRUE'
+
+x402_pay.settings:
+  path: '/admin/config/services/x402'
+  defaults:
+    _form: '\Drupal\x402_pay\Form\SettingsForm'
+    _title: 'x402 Pay'
+  requirements:
+    _permission: 'administer x402 pay'

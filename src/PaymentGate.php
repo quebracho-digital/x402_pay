@@ -39,12 +39,13 @@ class PaymentGate {
    *   differ per listing.
    * @param array $resource
    *   url, description, mimeType.
-   * @param \Drupal\x402_pay\Signer $seller
-   *   The payTo key, for the facilitator's seller proof.
+   * @param \Drupal\x402_pay\Signer|null $seller
+   *   The payTo key, for the facilitator's seller proof; NULL when a Circle
+   *   API key authenticates instead.
    * @param callable $handler
    *   Produces the paid response. Runs only after the payment verified.
    */
-  public function handle(Request $request, array $requirements, array $resource, Signer $seller, callable $handler): Response {
+  public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
     $header = $request->headers->get(PaymentHeaders::SIGNATURE);
     if ($header === NULL) {
       return $this->required($requirements, $resource, 'PAYMENT-SIGNATURE header is required');

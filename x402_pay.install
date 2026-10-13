@@ -63,3 +63,13 @@ function x402_pay_update_10002(): void {
     }
   }
 }
+
+/**
+ * Adds the facilitator access and sweep settings.
+ */
+function x402_pay_update_10003(): void {
+  $config = \Drupal::configFactory()->getEditable('x402_pay.settings');
+  $config->set('facilitator', ['auth' => 'keyless', 'api_key_id' => ''])
+    ->set('sweep', ['enabled' => FALSE, 'to' => '', 'keys' => [], 'min' => '1', 'interval' => 21600])
+    ->save();
+}

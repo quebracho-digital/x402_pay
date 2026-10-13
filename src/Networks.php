@@ -10,7 +10,9 @@ namespace Drupal\x402_pay;
 final class Networks {
 
   /**
-   * CAIP-2 network => its USDC. `extra` is the token's EIP-712 domain.
+   * CAIP-2 network => its USDC.
+   *
+   * `extra` is the token's EIP-712 domain; `rpc` a public node, for sweeping.
    */
   public const ALL = [
     'eip155:5042002' => [
@@ -18,6 +20,14 @@ final class Networks {
       'asset' => '0x3600000000000000000000000000000000000000',
       'decimals' => 6,
       'extra' => ['name' => 'USDC', 'version' => '2'],
+      'rpc' => 'https://rpc.testnet.arc.network',
+    ],
+    'eip155:5042' => [
+      'label' => 'Arc (USDC)',
+      'asset' => '0x3600000000000000000000000000000000000000',
+      'decimals' => 6,
+      'extra' => ['name' => 'USDC', 'version' => '2'],
+      'rpc' => 'https://rpc.mainnet.arc.io',
     ],
   ];
 

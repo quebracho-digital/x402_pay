@@ -4,14 +4,22 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
 
 /**
- * Circle's Facilitator Service, keyless: every call carries a seller proof.
+ * Circle's Facilitator Service.
+ *
+ * Keyless (the trial): every call carries a seller proof signed by the payTo
+ * key. With a Circle API key: a bearer token instead, so payTo needs no key
+ * here and can be a cold wallet; settling once with the key binds payTo to
+ * the Circle account.
  *
  * @see https://developers.circle.com/facilitator-service/quickstart
+ * @see https://developers.circle.com/facilitator-service/keyless-trial
  */
 class CircleFacilitator {
 
@@ -22,6 +30,8 @@ class CircleFacilitator {
     private readonly string $base = self::BASE,
     private readonly int $pollDelaySeconds = 1,
     private readonly int $pollAttempts = 5,
+    private readonly ?ConfigFactoryInterface $config = NULL,
+    private readonly ?KeyRepositoryInterface $keys = NULL,
   ) {}
 
   /**
@@ -30,7 +40,7 @@ class CircleFacilitator {
    * @return array
    *   isValid, payer, and invalidReason when not valid.
    */
-  public function verify(array $payload, array $requirements, Signer $seller): array {
+  public function verify(array $payload, array $requirements, ?Signer $seller): array {
     return $this->call('verify', $payload, $requirements, $seller);
   }
 
@@ -41,7 +51,7 @@ class CircleFacilitator {
    *   success, transaction, network, payer, and errorReason when not a
    *   success. Still pending after polling is not a success.
    */
-  public function settle(array $payload, array $requirements, Signer $seller): array {
+  public function settle(array $payload, array $requirements, ?Signer $seller): array {
     $result = $this->call('settle', $payload, $requirements, $seller);
     $paymentId = $result['extensions']['settlement-status']['paymentId'] ?? NULL;
     for ($i = 0; empty($result['success']) && $paymentId && $i < $this->pollAttempts; $i++) {
@@ -71,16 +81,39 @@ class CircleFacilitator {
   /**
    * Sends a payment and its requirements to /verify or /settle.
    */
-  private function call(string $purpose, array $payload, array $requirements, Signer $seller): array {
+  private function call(string $purpose, array $payload, array $requirements, ?Signer $seller): array {
     $body = json_encode(['x402Version' => 2, 'paymentPayload' => $payload, 'paymentRequirements' => $requirements], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     return $this->request('POST', "/$purpose", $body, $purpose, $requirements['network'], $seller);
   }
 
   /**
-   * Calls the facilitator with a seller proof and returns its JSON.
+   * The Circle API key, when the site uses one instead of the trial.
+   *
+   * @throws \Drupal\x402_pay\FacilitatorException
+   *   API key mode, but the key is missing.
    */
-  private function request(string $method, string $path, string $body, string $purpose, string $network, Signer $seller): array {
-    $headers = ['Facilitator-Seller-Proof' => SellerProof::header($seller, $purpose, $method, $body, $network)];
+  public function apiKey(): ?string {
+    $settings = $this->config?->get('x402_pay.settings')->get('facilitator') ?? [];
+    if (($settings['auth'] ?? 'keyless') !== 'api_key') {
+      return NULL;
+    }
+    $key = trim((string) $this->keys?->getKey((string) ($settings['api_key_id'] ?? ''))?->getKeyValue());
+    return $key !== '' ? $key : throw new FacilitatorException('No Circle API key configured.');
+  }
+
+  /**
+   * Calls the facilitator, authenticated, and returns its JSON.
+   */
+  private function request(string $method, string $path, string $body, string $purpose, string $network, ?Signer $seller): array {
+    if ($apiKey = $this->apiKey()) {
+      $headers = ['Authorization' => "Bearer $apiKey"];
+    }
+    elseif ($seller) {
+      $headers = ['Facilitator-Seller-Proof' => SellerProof::header($seller, $purpose, $method, $body, $network)];
+    }
+    else {
+      throw new FacilitatorException('Keyless settling needs the payTo key: set a Circle API key to sell to a wallet whose key is not here.');
+    }
     if ($body !== '') {
       $headers['Content-Type'] = 'application/json';
     }
