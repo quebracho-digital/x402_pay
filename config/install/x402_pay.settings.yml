@@ -5,9 +5,14 @@ agent_user_agents: 'GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Clau
 # signed by the seller's own key (so that key must live on this server).
 # api_key: a Circle API key from the Key module; payTo can then be a cold
 # wallet, since nothing here needs to sign for it.
+# own_networks: settled by this site itself, not Circle: it sends each
+# buyer's signed transfer from the gas wallet (own_key_id), which pays only
+# the gas (USDC on Arc).
 facilitator:
   auth: keyless
   api_key_id: ''
+  own_networks: []
+  own_key_id: ''
 # Keyless leaves seller keys on this server: cron moves what they collect
 # to a wallet whose key is not here. Arc only: its gas is USDC.
 sweep:

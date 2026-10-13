@@ -14,7 +14,7 @@ use Drupal\x402_pay\Signer;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * How the site reaches the facilitator, and where seller wallets are swept.
+ * Which facilitator settles each network, and where seller wallets are swept.
  */
 final class SettingsForm extends ConfigFormBase {
 
@@ -74,6 +74,21 @@ final class SettingsForm extends ConfigFormBase {
         '#default_value' => $config->get('facilitator.api_key_id'),
         '#states' => ['visible' => [':input[name="facilitator[auth]"]' => ['value' => 'api_key']]],
       ],
+      'own_networks' => [
+        '#type' => 'checkboxes',
+        '#title' => $this->t('Networks this site settles itself'),
+        '#description' => $this->t("Our own facilitator instead of Circle's: the site sends each buyer's signed transfer on chain. Sellers can be addresses alone."),
+        '#options' => array_map(fn($n) => $n['label'], Networks::ALL),
+        '#default_value' => $config->get('facilitator.own_networks') ?? [],
+      ],
+      'own_key_id' => [
+        '#type' => 'select',
+        '#title' => $this->t('Gas wallet'),
+        '#description' => $this->t('Pays the gas of each sale, in USDC on Arc, and nothing else: sales go from the buyer to the seller. Keep a few dollars in it.'),
+        '#options' => $this->keyOptions(),
+        '#empty_option' => $this->t('- Choose a key -'),
+        '#default_value' => $config->get('facilitator.own_key_id'),
+      ],
     ];
 
     $sweep = $config->get('sweep') ?? [];
@@ -130,6 +145,9 @@ final class SettingsForm extends ConfigFormBase {
     if ($facilitator['auth'] === 'api_key' && trim((string) $this->key($facilitator['api_key_id'])) === '') {
       $form_state->setErrorByName('facilitator][api_key_id', $this->t('Choose a key that holds the Circle API key.'));
     }
+    if (array_filter($facilitator['own_networks']) && !$facilitator['own_key_id']) {
+      $form_state->setErrorByName('facilitator][own_key_id', $this->t('Settling on chain needs a gas wallet.'));
+    }
 
     $sweep = $form_state->getValue('sweep');
     $keys = array_values(array_filter($sweep['keys']));
@@ -169,6 +187,8 @@ final class SettingsForm extends ConfigFormBase {
       ->set('facilitator', [
         'auth' => $facilitator['auth'],
         'api_key_id' => $facilitator['auth'] === 'api_key' ? (string) $facilitator['api_key_id'] : '',
+        'own_networks' => array_values(array_filter($facilitator['own_networks'])),
+        'own_key_id' => (string) $facilitator['own_key_id'],
       ])
       ->set('sweep', [
         'enabled' => (bool) $sweep['enabled'],

@@ -15,6 +15,14 @@ x402_pay.settings:
         api_key_id:
           type: string
           label: 'Circle API key (Key module id)'
+        own_networks:
+          type: sequence
+          label: 'Networks this site settles itself'
+          sequence:
+            type: string
+        own_key_id:
+          type: string
+          label: 'Gas wallet key (Key module id)'
     sweep:
       type: mapping
       label: 'Sweep seller wallets'

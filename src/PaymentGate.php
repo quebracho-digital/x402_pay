@@ -26,6 +26,7 @@ class PaymentGate {
   public function __construct(
     private readonly CircleFacilitator $facilitator,
     private readonly PaymentLog $log,
+    private readonly ?ChainFacilitator $chain = NULL,
   ) {}
 
   /**
@@ -60,9 +61,11 @@ class PaymentGate {
       return $this->required($requirements, $resource, 'The payment does not match the requirements');
     }
 
+    // Our own facilitator for the networks it settles; Circle for the rest.
+    $facilitator = $this->chain?->handles($requirements['network']) ? $this->chain : $this->facilitator;
     $this->timings = [];
     try {
-      $verified = $this->timed('verify', fn() => $this->facilitator->verify($payment, $requirements, $seller));
+      $verified = $this->timed('verify', fn() => $facilitator->verify($payment, $requirements, $seller));
     }
     catch (FacilitatorException $e) {
       return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
@@ -87,7 +90,7 @@ class PaymentGate {
     }
 
     try {
-      $settlement = $this->timed('settle', fn() => $this->facilitator->settle($payment, $requirements, $seller));
+      $settlement = $this->timed('settle', fn() => $facilitator->settle($payment, $requirements, $seller));
     }
     catch (FacilitatorException $e) {
       $this->log->record(['status' => 'failed', 'error' => $e->getMessage()] + $entry);

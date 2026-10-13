@@ -69,9 +69,14 @@ final class SettingsFormTest extends BrowserTestBase {
     $this->submitForm(['facilitator[auth]' => 'api_key', 'sweep[to]' => ''], 'Save configuration');
     $this->assertSession()->pageTextContains('Choose a key that holds the Circle API key.');
 
+    $this->submitForm(['facilitator[own_networks][eip155:5042]' => TRUE, 'sweep[to]' => ''], 'Save configuration');
+    $this->assertSession()->pageTextContains('Settling on chain needs a gas wallet.');
+
     $this->submitForm([
       'facilitator[auth]' => 'api_key',
       'facilitator[api_key_id]' => 'circle',
+      'facilitator[own_networks][eip155:5042]' => TRUE,
+      'facilitator[own_key_id]' => 'seller',
       'sweep[enabled]' => TRUE,
       'sweep[to]' => strtolower(self::COLD),
       'sweep[keys][seller]' => TRUE,
@@ -79,7 +84,12 @@ final class SettingsFormTest extends BrowserTestBase {
     ], 'Save configuration');
     $this->assertSession()->pageTextContains('The configuration options have been saved.');
     $config = $this->config('x402_pay.settings');
-    $this->assertSame(['auth' => 'api_key', 'api_key_id' => 'circle'], $config->get('facilitator'));
+    $this->assertSame([
+      'auth' => 'api_key',
+      'api_key_id' => 'circle',
+      'own_networks' => ['eip155:5042'],
+      'own_key_id' => 'seller',
+    ], $config->get('facilitator'));
     $this->assertSame(['enabled' => TRUE, 'to' => self::COLD, 'keys' => ['seller'], 'min' => '0.5', 'interval' => 21600], $config->get('sweep'));
   }
 

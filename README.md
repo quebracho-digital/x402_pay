@@ -3,8 +3,16 @@
 Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 
 - **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per request; unpaid requests get a 402 with the payment
-  requirements; verify and settle through Circle's facilitator **only on a
-  2xx response**; a payment log (route, amount, payer, tx hash).
+  requirements; verify and settle **only on a 2xx response**; a payment log
+  (route, amount, payer, tx hash).
+- **Facilitators** (`/admin/config/services/x402`), per network:
+  - **Circle's**: the keyless trial (each sale signed by the seller key) or a
+    Circle API key (sellers can be bare addresses).
+  - **Our own** (`ChainFacilitator`): the site sends the buyer's signed
+    `transferWithAuthorization` from a gas wallet that pays only the gas
+    (~87k gas: about 0.002 USDC on Arc mainnet). The token checks the
+    signature, balance, time window and nonce; the site checks seller and
+    price. No third party, no permission.
 - **The `x402_price` field**: add it to any fieldable entity and agents pay
   to read it. Each field is one product: a view mode at a price.
   - **Settings:** price, network and seller key; `payTo` is the key's own

@@ -100,23 +100,23 @@ class Sweeper {
       'error' => NULL,
     ];
     try {
-      $rpc = fn(string $method, array $params) => $this->rpc($token['rpc'], $method, $params);
-      $balanceOf = ['to' => $token['asset'], 'data' => '0x70a08231' . self::word($from->address())];
-      $balance = self::number($rpc('eth_call', [$balanceOf, 'latest']));
+      $rpc = new Rpc($this->httpClient, $token['rpc']);
+      $balanceOf = ['to' => $token['asset'], 'data' => '0x70a08231' . Rpc::word($from->address())];
+      $balance = Rpc::number($rpc('eth_call', [$balanceOf, 'latest']));
       $row['balance'] = gmp_strval($balance);
       if (gmp_sign($balance) === 0) {
         return $row;
       }
-      $gasPrice = self::number($rpc('eth_gasPrice', []));
+      $gasPrice = Rpc::number($rpc('eth_gasPrice', []));
       // Twice today's price, so a busier block still takes it.
       $maxFee = gmp_mul($gasPrice, 2);
       $transfer = [
         'from' => $from->address(),
         'to' => $token['asset'],
-        'data' => '0xa9059cbb' . self::word($to) . self::word(gmp_strval($balance, 16)),
+        'data' => '0xa9059cbb' . Rpc::word($to) . Rpc::word(gmp_strval($balance, 16)),
       ];
       // Its estimate and a fifth more.
-      $gas = gmp_div_q(gmp_mul(self::number($rpc('eth_estimateGas', [$transfer])), 12), 10);
+      $gas = gmp_div_q(gmp_mul(Rpc::number($rpc('eth_estimateGas', [$transfer])), 12), 10);
       // The most the gas can cost, in token units, rounded up.
       $fee = gmp_div_q(gmp_mul($gas, $maxFee), self::NATIVE_PER_ATOMIC, GMP_ROUND_PLUSINF);
       $amount = gmp_sub($balance, $fee);
@@ -129,7 +129,7 @@ class Sweeper {
       }
       $raw = Transfer::sign($from, [
         'chainId' => explode(':', $network)[1],
-        'nonce' => gmp_strval(self::number($rpc('eth_getTransactionCount', [$from->address(), 'pending']))),
+        'nonce' => gmp_strval(Rpc::number($rpc('eth_getTransactionCount', [$from->address(), 'pending']))),
         'maxPriorityFeePerGas' => gmp_strval($gasPrice),
         'maxFeePerGas' => gmp_strval($maxFee),
         'gas' => gmp_strval($gas),
@@ -155,34 +155,6 @@ class Sweeper {
       ]);
     }
     return $row;
-  }
-
-  /**
-   * A 0x-hex quantity as a number.
-   */
-  private static function number(string $hex): \GMP {
-    return gmp_init(ltrim(substr($hex, 2), '0') ?: '0', 16);
-  }
-
-  /**
-   * Hex (an address or a number) left-padded to a 32-byte ABI word.
-   */
-  private static function word(string $hex): string {
-    return str_pad(strtolower(str_starts_with($hex, '0x') ? substr($hex, 2) : $hex), 64, '0', STR_PAD_LEFT);
-  }
-
-  /**
-   * One JSON-RPC call; its result.
-   */
-  private function rpc(string $url, string $method, array $params): mixed {
-    $response = json_decode((string) $this->httpClient->request('POST', $url, [
-      'json' => ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params],
-      'timeout' => 20,
-    ])->getBody(), TRUE);
-    if (isset($response['error'])) {
-      throw new \RuntimeException("$method: " . ($response['error']['message'] ?? 'error'));
-    }
-    return $response['result'] ?? throw new \RuntimeException("$method: no result");
   }
 
 }

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Drupal\x402_pay;
 
 /**
- * A signed EIP-1559 transaction that moves an ERC-20 token.
+ * A signed EIP-1559 transaction that calls an ERC-20 token.
  *
- * Only what sweeping needs: transfer(to, amount) on one token, no value,
- * no access list. Equal byte for byte to viem's signTransaction.
+ * A transfer(to, amount) for sweeping, or any calldata (settling a buyer's
+ * transferWithAuthorization). No value, no access list. Equal byte for
+ * byte to viem's signTransaction.
  */
 final class Transfer {
 
@@ -19,10 +20,11 @@ final class Transfer {
    *   The sender's key: it pays the gas.
    * @param array $tx
    *   chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gas (integers or
-   *   decimal strings), token, to (addresses) and amount (atomic units).
+   *   decimal strings), token (the contract called), and either data
+   *   (0x-hex calldata) or to (an address) and amount (atomic units).
    */
   public static function sign(Signer $from, array $tx): string {
-    $data = Eip712::raw('0xa9059cbb')
+    $data = isset($tx['data']) ? Eip712::raw($tx['data']) : Eip712::raw('0xa9059cbb')
       . str_pad(Eip712::raw($tx['to']), 32, "\0", STR_PAD_LEFT)
       . str_pad(self::int($tx['amount']), 32, "\0", STR_PAD_LEFT);
     $fields = [
