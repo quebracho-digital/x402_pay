@@ -1,10 +1,10 @@
-// A buyer agent in one file: call a URL, pay its 402 on Arc testnet, print
+// A buyer agent in one file: call a URL, pay its 402 on Arc (mainnet or testnet, as it asks), print
 // what it bought and the seller's balance on chain before and after.
 // Run: node --env-file=.env buy.mjs <url> [max USDC, default 0.05] [JSON input]
 // With a JSON input the call is a POST with it as the body (a service).
 // For DDEV's certificate: NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem"
 import { formatUnits } from "viem";
-import { balanceOf, pay } from "./x402.mjs";
+import { EXPLORER, balanceOf, pay } from "./x402.mjs";
 
 const [url, max = "0.05", input] = process.argv.slice(2);
 if (!url) throw new Error("Usage: buy.mjs <url> [max USDC] [JSON input]");
@@ -21,7 +21,7 @@ const paid = await pay(url, {
 const { req, receipt, server, t } = paid;
 console.log(`paid → HTTP ${paid.status} ${paid.contentType}`);
 if (receipt) {
-  console.log(receipt.success ? `tx https://testnet.arcscan.app/tx/${receipt.transaction}` : `not settled: ${JSON.stringify(receipt)}`);
+  console.log(receipt.success ? `tx ${EXPLORER[receipt.network ?? req.network]}${receipt.transaction}` : `not settled: ${JSON.stringify(receipt)}`);
 }
 // Where the time went: ours (ask, sign, pay) and the seller's Server-Timing.
 console.log(`timing ms → total ${t.ask + t.sign + t.pay} = ask ${t.ask} + sign ${t.sign} + pay ${t.pay}; pay = ${Object.entries(server).map(([k, v]) => `${k} ${v}`).join(" + ")} + rest ${Math.round(t.pay - Object.values(server).reduce((a, b) => a + b, 0))}`);

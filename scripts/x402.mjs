@@ -4,7 +4,9 @@ import { createPublicClient, http, parseAbi, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { Agent } from "undici";
 
-const RPC = { "eip155:5042002": "https://rpc.testnet.arc.network" };
+const RPC = { "eip155:5042": "https://rpc.mainnet.arc.io", "eip155:5042002": "https://rpc.testnet.arc.network" };
+/** Where people see a transaction, by network. */
+export const EXPLORER = { "eip155:5042": "https://explorer.arc.io/tx/", "eip155:5042002": "https://testnet.arcscan.app/tx/" };
 const decode = (h) => JSON.parse(Buffer.from(h, "base64").toString());
 const ms = (t0) => Math.round(performance.now() - t0);
 
