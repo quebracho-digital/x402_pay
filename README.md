@@ -62,8 +62,9 @@ file: it reads the 402, signs the payment and prints what it bought, where
 the time went (with the seller's `Server-Timing`) and the seller's balance
 on chain before and after. With a JSON input it POSTs it, for services.
 
-Arc testnet only (`eip155:5042002`). Wallet credentials go through the `key`
-module from an environment variable, never in exportable config.
+Arc mainnet (`eip155:5042`) and testnet (`eip155:5042002`). Wallet keys and
+API keys go through the `key` module from an environment variable, never in
+exportable config.
 
 Built for [Ombú](https://github.com/quebracho-digital/ombu), the agent mall;
 plan and status in its [ROADMAP](https://github.com/quebracho-digital/ombu/blob/main/ROADMAP.md).
