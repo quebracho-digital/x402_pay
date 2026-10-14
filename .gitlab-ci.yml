@@ -1,0 +1,40 @@
+include:
+  - project: $_GITLAB_TEMPLATES_REPO
+    ref: $_GITLAB_TEMPLATES_REF
+    file:
+      - '/includes/include.drupalci.main.yml'
+      - '/includes/include.drupalci.variables.yml'
+      - '/includes/include.drupalci.workflows.yml'
+
+variables:
+  _TARGET_DRUPAL: 11.0
+  _TARGET_PHP: 8.3
+  _PHPUNIT_EXTRA: --verbose
+  OPT_IN_TEST_PREVIOUS_MAJOR: 1
+  OPT_IN_TEST_PREVIOUS_MINOR: 0
+  OPT_IN_TEST_NEXT_MINOR: 1
+  OPT_IN_TEST_NEXT_MAJOR: 1
+  OPT_IN_TEST_MAX_PHP: 1
+  _PHPUNIT_CONCURRENT: 1
+  SKIP_ESLINT: 1
+
+phpcs:
+  allow_failure: false
+phpstan:
+  allow_failure: false
+  before_script:
+    - composer require --dev drush/drush
+
+# ponytail: copy of the template's exclude list plus the PHPStan turbo-ext
+# files that push the composer artifact over the upload limit (413). Drop
+# this block once gitlab_templates!528 (#3572444) is merged.
+.composer-base:
+  artifacts:
+    exclude:
+      - '.git'
+      - '.git/**/*'
+      - '$_WEB_ROOT/**/.git'
+      - '$_WEB_ROOT/**/.git/**/*'
+      - 'vendor/**/.git'
+      - 'vendor/**/.git/**/*'
+      - 'vendor/phpstan/phpstan/turbo-ext/**'
