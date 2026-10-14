@@ -16,7 +16,7 @@ services:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher']
+    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher', '@settings']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']

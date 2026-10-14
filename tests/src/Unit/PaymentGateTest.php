@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\x402_pay\Unit;
 
+use Drupal\Core\Site\Settings;
 use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -312,6 +313,38 @@ final class PaymentGateTest extends UnitTestCase {
 
     $this->assertSame(502, $response->getStatusCode());
     $this->assertFalse($response->headers->has('PAYMENT-RESPONSE'));
+  }
+
+  /**
+   * A sale that outlived the proxy is never settled: the buyer has left.
+   */
+  public function testTooSlowIsNeverSettled(): void {
+    $this->gate = new PaymentGate($this->facilitator, $this->log, NULL, NULL, new Settings(['x402_pay_deadline' => 95]));
+    $this->valid();
+    $this->facilitator->expects($this->never())->method('settle');
+    $this->log->expects($this->once())->method('record')->with($this->callback(fn(array $e) =>
+      $e['status'] === 'not_settled' && $e['error'] === 'deadline' && $e['handler_status'] === 200
+    ));
+    $request = $this->request($this->payment());
+    $request->server->set('REQUEST_TIME_FLOAT', microtime(TRUE) - 96);
+
+    $response = $this->handle($request);
+
+    $this->assertSame(504, $response->getStatusCode());
+    $this->assertStringNotContainsString('pong', (string) $response->getContent());
+    $this->assertFalse($response->headers->has('PAYMENT-RESPONSE'));
+  }
+
+  /**
+   * Without the setting a slow sale still settles: no proxy, no deadline.
+   */
+  public function testNoDeadlineByDefault(): void {
+    $this->valid();
+    $this->facilitator->expects($this->once())->method('settle')->willReturn(['success' => TRUE, 'transaction' => '0xabc']);
+    $request = $this->request($this->payment());
+    $request->server->set('REQUEST_TIME_FLOAT', microtime(TRUE) - 1000);
+
+    $this->assertSame(200, $this->handle($request)->getStatusCode());
   }
 
   /**

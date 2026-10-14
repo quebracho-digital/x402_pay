@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Site\Settings;
 use Drupal\x402_pay\Event\PaymentEvent;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PaymentGate {
 
+
   /**
    * Milliseconds per step of the current payment, for Server-Timing.
    */
@@ -30,6 +32,7 @@ class PaymentGate {
     private readonly PaymentLog $log,
     private readonly ?ChainFacilitator $chain = NULL,
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
+    private readonly ?Settings $settings = NULL,
   ) {}
 
   /**
@@ -90,6 +93,17 @@ class PaymentGate {
     if (!$response->isSuccessful()) {
       $this->record($request, ['status' => 'not_settled'] + $entry);
       return $this->withTimings($response);
+    }
+    // A proxy that drops slow responses (Cloudflare's tunnel: 524 at 100 s)
+    // leaves the buyer without the body, so charging them would be for
+    // nothing. Off unless settings.php sets it, e.g.
+    // $settings['x402_pay_deadline'] = 95;
+    // ponytail: one limit for the whole site; long jobs go async later.
+    $deadline = $this->settings?->get('x402_pay_deadline');
+    $started = (float) $request->server->get('REQUEST_TIME_FLOAT', microtime(TRUE));
+    if ($deadline && microtime(TRUE) - $started > $deadline) {
+      $this->record($request, ['status' => 'not_settled', 'error' => 'deadline'] + $entry);
+      return $this->withTimings(new JsonResponse(['error' => sprintf('Took over %d s: not charged, try a smaller input', $deadline)], 504));
     }
 
     try {
