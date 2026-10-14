@@ -18,17 +18,28 @@ variables:
   _PHPUNIT_CONCURRENT: 1
   SKIP_ESLINT: 1
 
+# The drupal.org images have no gmp, which the secp256k1 and keccak
+# libraries need (signatures). Each base job installs it first.
+.with-gmp: &with-gmp
+  - apt-get update -qq && apt-get install -y -qq libgmp-dev > /dev/null
+  - docker-php-ext-install gmp > /dev/null
+  - php -m | grep -q gmp
+.phpunit-base:
+  before_script: *with-gmp
+
 phpcs:
   allow_failure: false
 phpstan:
   allow_failure: false
   before_script:
+    - *with-gmp
     - composer require --dev drush/drush
 
 # ponytail: copy of the template's exclude list plus the PHPStan turbo-ext
 # files that push the composer artifact over the upload limit (413). Drop
 # this block once gitlab_templates!528 (#3572444) is merged.
 .composer-base:
+  before_script: *with-gmp
   artifacts:
     exclude:
       - '.git'
