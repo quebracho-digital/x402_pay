@@ -28,7 +28,16 @@ final class PageCacheTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['x402_pay', 'key', 'entity_test', 'page_cache', 'dynamic_page_cache', 'field_ui', 'jsonapi', 'serialization'];
+  protected static $modules = [
+    'x402_pay',
+    'key',
+    'entity_test',
+    'page_cache',
+    'dynamic_page_cache',
+    'field_ui',
+    'jsonapi',
+    'serialization',
+  ];
 
   /**
    * {@inheritdoc}
@@ -76,8 +85,10 @@ final class PageCacheTest extends BrowserTestBase {
   }
 
   /**
-   * Markdown comes from the gate alone: sold entities charge on every route
-   * that shows them, free ones are converted, with the caches warm.
+   * Markdown comes from the gate alone.
+   *
+   * Sold entities charge on every route that shows them, free ones are
+   * converted, with the caches warm.
    */
   public function testMarkdownComesFromTheGateAlone(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view test entity')->save();

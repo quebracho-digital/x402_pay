@@ -8,8 +8,9 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\EventDispatcher\Event;
 
 /**
- * A payment's outcome, once it is in the log: react to it (ECA, accounting,
- * reputation, a notice to the seller).
+ * A payment's outcome, once it is in the log.
+ *
+ * React to it: ECA, accounting, reputation, a notice to the seller.
  *
  * Statuses: settled (paid and delivered), not_settled (the handler failed,
  * nothing charged), failed (delivered but settlement failed: body withheld).
@@ -23,6 +24,9 @@ final class PaymentEvent extends Event {
     public readonly Request $request,
   ) {}
 
+  /**
+   * The outcome: settled, not_settled or failed.
+   */
   public function status(): string {
     return $this->entry['status'];
   }

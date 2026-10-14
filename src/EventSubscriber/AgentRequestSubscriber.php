@@ -139,6 +139,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     return NULL;
   }
 
+  /**
+   * Whether the route is an entity's own page.
+   */
   private function isCanonical(Request $request): bool {
     return (bool) preg_match('/^entity\.\w+\.canonical$/', (string) $request->attributes->get('_route'));
   }

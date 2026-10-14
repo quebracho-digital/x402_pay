@@ -21,7 +21,7 @@ final class SettingsForm extends ConfigFormBase {
   public function __construct(
     ConfigFactoryInterface $configFactory,
     TypedConfigManagerInterface $typedConfigManager,
-    private readonly KeyRepositoryInterface $keys,
+    protected KeyRepositoryInterface $keys,
   ) {
     parent::__construct($configFactory, $typedConfigManager);
   }

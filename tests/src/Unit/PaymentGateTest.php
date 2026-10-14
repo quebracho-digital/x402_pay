@@ -255,7 +255,11 @@ final class PaymentGateTest extends UnitTestCase {
    */
   public function testEachOutcomeIsAnEvent(): void {
     $this->valid();
-    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX, 'payer' => self::BUYER]);
+    $this->facilitator->method('settle')->willReturn([
+      'success' => TRUE,
+      'transaction' => self::TX,
+      'payer' => self::BUYER,
+    ]);
     $this->handle($this->request($this->payment()));
     $this->handle($this->request($this->payment()), 502);
 
@@ -340,7 +344,8 @@ final class PaymentGateTest extends UnitTestCase {
    */
   public function testNoDeadlineByDefault(): void {
     $this->valid();
-    $this->facilitator->expects($this->once())->method('settle')->willReturn(['success' => TRUE, 'transaction' => '0xabc']);
+    $this->facilitator->expects($this->once())->method('settle')
+      ->willReturn(['success' => TRUE, 'transaction' => '0xabc']);
     $request = $this->request($this->payment());
     $request->server->set('REQUEST_TIME_FLOAT', microtime(TRUE) - 1000);
 
