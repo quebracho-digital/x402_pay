@@ -19,13 +19,14 @@ variables:
   SKIP_ESLINT: 1
 
 # The drupal.org images have no gmp, which the secp256k1 and keccak
-# libraries need (signatures), and no PHP source to build it from: fetch
-# the source of the image's own PHP version, then build it.
+# libraries need (signatures). Their PHP is built in /usr/local (apt's
+# php8.3-gmp is for another build) and ships no source: build the extension
+# from the same version's source with phpize. Tried in the image itself.
 .with-gmp: &with-gmp
-  - apt-get update -qq && apt-get install -y -qq libgmp-dev xz-utils > /dev/null
-  - test -f /usr/src/php.tar.xz || curl -fsSL "https://www.php.net/distributions/php-$(php -r 'echo PHP_VERSION;').tar.xz" -o /usr/src/php.tar.xz
-  - docker-php-ext-install gmp > /dev/null
-  - php -m | grep -q gmp
+  - apt-get update -qq && apt-get install -y -qq libgmp-dev $PHPIZE_DEPS > /dev/null
+  - V=$(php -r 'echo PHP_VERSION;') && curl -fsSL "https://www.php.net/distributions/php-$V.tar.gz" | tar xz -C /tmp "php-$V/ext/gmp"
+  - (cd /tmp/php-*/ext/gmp && phpize > /dev/null && ./configure -q > /dev/null && make -s -j4 > /dev/null && make -s install > /dev/null)
+  - docker-php-ext-enable gmp && php -m | grep -qx gmp
 .phpunit-base:
   before_script: *with-gmp
 
