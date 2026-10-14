@@ -19,9 +19,11 @@ variables:
   SKIP_ESLINT: 1
 
 # The drupal.org images have no gmp, which the secp256k1 and keccak
-# libraries need (signatures). Each base job installs it first.
+# libraries need (signatures), and no PHP source to build it from: fetch
+# the source of the image's own PHP version, then build it.
 .with-gmp: &with-gmp
-  - apt-get update -qq && apt-get install -y -qq libgmp-dev > /dev/null
+  - apt-get update -qq && apt-get install -y -qq libgmp-dev xz-utils > /dev/null
+  - test -f /usr/src/php.tar.xz || curl -fsSL "https://www.php.net/distributions/php-$(php -r 'echo PHP_VERSION;').tar.xz" -o /usr/src/php.tar.xz
   - docker-php-ext-install gmp > /dev/null
   - php -m | grep -q gmp
 .phpunit-base:
