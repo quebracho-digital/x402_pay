@@ -12,7 +12,8 @@ final class Networks {
   /**
    * CAIP-2 network => its USDC.
    *
-   * `extra` is the token's EIP-712 domain; `rpc` a public node, for sweeping.
+   * `extra` is the token's EIP-712 domain; `rpc` a public node, for sweeping;
+   * `explorer` where people see a transaction.
    */
   public const ALL = [
     'eip155:5042002' => [
@@ -21,6 +22,7 @@ final class Networks {
       'decimals' => 6,
       'extra' => ['name' => 'USDC', 'version' => '2'],
       'rpc' => 'https://rpc.testnet.arc.network',
+      'explorer' => 'https://testnet.arcscan.app/tx/',
     ],
     'eip155:5042' => [
       'label' => 'Arc (USDC)',
@@ -28,6 +30,7 @@ final class Networks {
       'decimals' => 6,
       'extra' => ['name' => 'USDC', 'version' => '2'],
       'rpc' => 'https://rpc.mainnet.arc.io',
+      'explorer' => 'https://explorer.arc.io/tx/',
     ],
   ];
 

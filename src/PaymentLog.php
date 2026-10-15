@@ -25,7 +25,7 @@ class PaymentLog {
    *
    * @param array $entry
    *   Keys: resource, network, amount, pay_to, payer, status, transaction,
-   *   handler_status, error.
+   *   handler_status, error; entity_type and entity_id, what was sold.
    */
   public function record(array $entry): void {
     $this->database->insert('x402_pay_log')->fields([
@@ -39,6 +39,8 @@ class PaymentLog {
       'transaction' => $entry['transaction'],
       'handler_status' => $entry['handler_status'],
       'error' => $entry['error'] ?? NULL,
+      'entity_type' => $entry['entity_type'] ?? NULL,
+      'entity_id' => $entry['entity_id'] ?? NULL,
     ])->execute();
   }
 

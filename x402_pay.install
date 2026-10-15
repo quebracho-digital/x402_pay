@@ -35,9 +35,11 @@ function x402_pay_schema(): array {
         'transaction' => ['type' => 'varchar_ascii', 'length' => 128],
         'handler_status' => ['type' => 'int', 'size' => 'small', 'not null' => TRUE],
         'error' => ['type' => 'varchar', 'length' => 255],
+        'entity_type' => ['type' => 'varchar_ascii', 'length' => 32, 'description' => 'What was sold: its entity type…'],
+        'entity_id' => ['type' => 'varchar_ascii', 'length' => 64, 'description' => '…and its id.'],
       ],
       'primary key' => ['id'],
-      'indexes' => ['payer' => ['payer'], 'pay_to' => ['pay_to'], 'transaction' => ['transaction']],
+      'indexes' => ['payer' => ['payer'], 'pay_to' => ['pay_to'], 'transaction' => ['transaction'], 'entity' => ['entity_type', 'entity_id']],
     ],
   ];
 }
@@ -72,4 +74,28 @@ function x402_pay_update_10003(): void {
   $config->set('facilitator', ['auth' => 'keyless', 'api_key_id' => ''])
     ->set('sweep', ['enabled' => FALSE, 'to' => '', 'keys' => [], 'min' => '1', 'interval' => 21600])
     ->save();
+}
+
+/**
+ * The log names the entity sold, for Views: sales per product or node.
+ *
+ * Older rows get it from their /x402/{type}/{id}/ URL; a sale on an
+ * entity's own (aliased) URL stays without it.
+ */
+function x402_pay_update_10004(): void {
+  $schema = \Drupal::database()->schema();
+  foreach (x402_pay_schema()['x402_pay_log']['fields'] as $name => $spec) {
+    if (in_array($name, ['entity_type', 'entity_id'], TRUE) && !$schema->fieldExists('x402_pay_log', $name)) {
+      $schema->addField('x402_pay_log', $name, $spec);
+    }
+  }
+  if (!$schema->indexExists('x402_pay_log', 'entity')) {
+    $schema->addIndex('x402_pay_log', 'entity', ['entity_type', 'entity_id'], x402_pay_schema()['x402_pay_log']);
+  }
+  $database = \Drupal::database();
+  foreach ($database->select('x402_pay_log', 'l')->fields('l', ['id', 'resource'])->isNull('entity_type')->execute() as $row) {
+    if (preg_match('#/x402/([a-z0-9_]+)/([^/]+)/#', (string) parse_url($row->resource, PHP_URL_PATH), $m)) {
+      $database->update('x402_pay_log')->fields(['entity_type' => $m[1], 'entity_id' => $m[2]])->condition('id', $row->id)->execute();
+    }
+  }
 }

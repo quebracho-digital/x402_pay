@@ -45,7 +45,7 @@ class PaymentGate {
    *   maxTimeoutSeconds, extra). Set by the caller, so price and payTo can
    *   differ per listing.
    * @param array $resource
-   *   url, description, mimeType.
+   *   url, description, mimeType; entity_type and entity_id, logged only.
    * @param \Drupal\x402_pay\Signer|null $seller
    *   The payTo key, for the facilitator's seller proof; NULL when a Circle
    *   API key authenticates instead.
@@ -89,6 +89,8 @@ class PaymentGate {
       'payer' => $verified['payer'] ?? NULL,
       'handler_status' => $response->getStatusCode(),
       'transaction' => NULL,
+      'entity_type' => $resource['entity_type'] ?? NULL,
+      'entity_id' => $resource['entity_id'] ?? NULL,
     ];
     if (!$response->isSuccessful()) {
       $this->record($request, ['status' => 'not_settled'] + $entry);
@@ -167,7 +169,7 @@ class PaymentGate {
    * The 402 that asks for payment, as JSON and as PAYMENT-REQUIRED.
    */
   private function required(array $requirements, array $resource, string $error): Response {
-    $required = ['x402Version' => 2, 'error' => $error, 'resource' => $resource, 'accepts' => [$requirements]];
+    $required = ['x402Version' => 2, 'error' => $error, 'resource' => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])), 'accepts' => [$requirements]];
     $response = new JsonResponse($required, 402);
     $response->headers->set(PaymentHeaders::REQUIRED, PaymentHeaders::encode($required));
     return $response;

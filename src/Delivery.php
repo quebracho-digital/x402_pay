@@ -77,6 +77,9 @@ class Delivery {
       'url' => $url->toString(TRUE)->getGeneratedUrl(),
       'description' => (string) $entity->label(),
       'mimeType' => $event->mimeType(),
+      // For the log only (PaymentGate): not sent to the buyer.
+      'entity_type' => $entity->getEntityTypeId(),
+      'entity_id' => (string) $entity->id(),
     ];
     return $this->gate->handle($request, $requirements, $resource, $seller, $deliver);
   }
