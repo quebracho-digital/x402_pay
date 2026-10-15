@@ -128,7 +128,23 @@ class ChainFacilitator {
         'token' => $requirements['asset'],
         'data' => $call['data'],
       ]);
-      $result['transaction'] = $rpc('eth_sendRawTransaction', [$raw]);
+      // The node may refuse a send it took ("internal error" on Arc
+      // mainnet, 2026-10-15): the seller has already delivered, so try once
+      // more, then look for the transaction by its own hash below. The same
+      // raw transaction cannot pay twice (one nonce, one hash).
+      for ($try = 1; ; $try++) {
+        try {
+          $result['transaction'] = $rpc('eth_sendRawTransaction', [$raw]);
+          break;
+        }
+        catch (\RuntimeException $e) {
+          if ($try === 2) {
+            $result['transaction'] = Eip712::keccak(hex2bin(substr($raw, 2)));
+            $sendError = $e->getMessage();
+            break;
+          }
+        }
+      }
     }
     catch (\RuntimeException $e) {
       return ['errorReason' => $e->getMessage()] + $result;
@@ -154,6 +170,9 @@ class ChainFacilitator {
           : ['errorReason' => 'transaction_reverted'] + $result;
       }
       usleep($this->pollDelayMs * 1000);
+    }
+    if (isset($sendError)) {
+      return ['errorReason' => $sendError, 'transaction' => ''] + $result;
     }
     // ponytail: sent but not mined in time: the buyer may still pay. A
     // receipt check on cron that delivers or logs it, if this ever happens.

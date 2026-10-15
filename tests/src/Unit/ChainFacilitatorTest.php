@@ -229,4 +229,37 @@ final class ChainFacilitatorTest extends UnitTestCase {
     $this->assertSame('0xtx', $result['transaction']);
   }
 
+  /**
+   * A send the node refuses is retried, then found by its hash if it got in.
+   */
+  public function testARefusedSendIsRetriedAndFoundByItsHash(): void {
+    $result = $this->facilitator([
+      'eth_gasPrice' => '0x1',
+      'eth_estimateGas' => '0x1',
+      'eth_getTransactionCount' => '0x0',
+      'eth_sendRawTransaction' => new \RuntimeException('internal error'),
+      'eth_getTransactionReceipt' => ['status' => '0x1'],
+    ])->settle($this->payload(), $this->requirements());
+
+    $this->assertTrue($result['success']);
+    $this->assertMatchesRegularExpression('/^0x[0-9a-f]{64}$/', $result['transaction']);
+    $this->assertSame(2, count(array_keys($this->methods(), 'eth_sendRawTransaction')));
+  }
+
+  /**
+   * Refused twice and not on chain: not a sale, with the node's reason.
+   */
+  public function testARefusedSendNotOnChainIsNotSale(): void {
+    $result = $this->facilitator([
+      'eth_gasPrice' => '0x1',
+      'eth_estimateGas' => '0x1',
+      'eth_getTransactionCount' => '0x0',
+      'eth_sendRawTransaction' => new \RuntimeException('internal error'),
+      'eth_getTransactionReceipt' => NULL,
+    ])->settle($this->payload(), $this->requirements());
+
+    $this->assertFalse($result['success']);
+    $this->assertStringContainsString('internal error', $result['errorReason']);
+  }
+
 }
