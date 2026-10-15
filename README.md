@@ -72,10 +72,18 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
 - **Coming:** `x402_pay_commerce`, a Drupal Commerce payment gateway on top
   of it, so a person can check out in USDC.
 
-`scripts/buy.mjs <url> [max USDC] [JSON input]` is a buyer agent in one
-file: it reads the 402, signs the payment and prints what it bought, where
-the time went (with the seller's `Server-Timing`) and the seller's balance
-on chain before and after. With a JSON input it POSTs it, for services.
+- **The buyer** (`Drupal\x402_pay\Buyer`): the other side, for a site or
+  a script that buys from agents. It reads the 402, lets a callback refuse
+  the price (a budget), signs one EIP-3009 transfer and asks again, paid.
+  From the command line: `BUYER_PRIVATE_KEY=0x… drush x402:buy <url>
+  [--input='{"q": 1}'] [--max=0.05]`.
+
+**No Node.js, no npm.** Everything is signed in PHP (`Signer`, `Eip712`, on
+`kornrunner/keccak` and `kornrunner/secp256k1`), and the tests check it
+against vectors that viem produced once (`tests/fixtures/`), byte for byte.
+The Node scripts this module started with (a viem buyer and the vector
+generator) are gone, by rule: no dependency tree we did not read gets near
+a wallet key. See [Ombú's README](https://github.com/quebracho-digital/ombu#no-nodejs-on-purpose).
 
 Arc mainnet (`eip155:5042`) and testnet (`eip155:5042002`). Wallet keys and
 API keys go through the `key` module from an environment variable, never in

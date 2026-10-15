@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay\Drush\Commands;
 
+use Drupal\x402_pay\Buyer;
+use Drupal\x402_pay\Networks;
+use Drupal\x402_pay\Signer;
 use Drupal\x402_pay\Sweeper;
+use GuzzleHttp\ClientInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\AutowireTrait;
 use Drush\Commands\DrushCommands;
@@ -20,6 +24,8 @@ final class X402Commands extends DrushCommands {
   public function __construct(
     #[Autowire(service: 'x402_pay.sweeper')]
     private readonly Sweeper $sweeper,
+    #[Autowire(service: 'http_client')]
+    private readonly ClientInterface $httpClient,
   ) {
     parent::__construct();
   }
@@ -38,6 +44,30 @@ final class X402Commands extends DrushCommands {
     if (!$rows) {
       $this->logger()->success('Every seller wallet is empty.');
     }
+  }
+
+  /**
+   * Buys an x402 call: the buyer's key from BUYER_PRIVATE_KEY.
+   */
+  #[CLI\Command(name: 'x402:buy')]
+  #[CLI\Argument(name: 'url', description: 'The paid resource.')]
+  #[CLI\Option(name: 'input', description: 'A JSON body: the call becomes a POST (a service).')]
+  #[CLI\Option(name: 'max', description: 'The most it may pay, in USDC.')]
+  #[CLI\Usage(name: 'BUYER_PRIVATE_KEY=0x… drush x402:buy https://example.com/x402/node/2/full --max=0.05', description: 'Pays a page, if it costs at most 5 cents.')]
+  public function buy(string $url, array $options = ['input' => NULL, 'max' => '0.05']): void {
+    $key = getenv('BUYER_PRIVATE_KEY') ?: throw new \RuntimeException('Set BUYER_PRIVATE_KEY.');
+    $input = $options['input'] === NULL ? NULL : (json_decode($options['input'], TRUE) ?? throw new \InvalidArgumentException('--input is not JSON.'));
+    $max = (int) round((float) $options['max'] * 1e6);
+    $buyer = new Buyer($this->httpClient, new Signer(trim($key)));
+    $paid = $buyer->pay($url, $input, function (array $req) use ($max) {
+      $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));
+      if ((int) $req['amount'] > $max) {
+        throw new \RuntimeException(sprintf('Over the maximum: %s > %s atomic units. Not paid.', $req['amount'], $max));
+      }
+    });
+    $this->io()->writeln(sprintf('buyer %s → HTTP %d %s', $buyer->address(), $paid['status'], $paid['contentType']));
+    $this->io()->writeln($paid['tx'] ? 'tx ' . (Networks::ALL[$paid['network']]['explorer'] ?? '') . $paid['tx'] : 'not charged');
+    $this->io()->writeln("---\n" . $paid['body']);
   }
 
 }

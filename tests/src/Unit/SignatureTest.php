@@ -14,8 +14,9 @@ use Drupal\x402_pay\Transfer;
 /**
  * EIP-712 hashing, signing and the seller proof, against viem's output.
  *
- * The vectors come from scripts/make-vectors.mjs: viem is what settled the
- * day-1 payment against Circle, so matching it byte for byte is the check.
+ * The vectors in tests/fixtures were produced once by viem 2.x (the code that
+ * settled the day-1 payment against Circle), with a script removed since
+ * (no Node: see the README); matching them byte for byte is the check.
  */
 #[Group('x402_pay')]
 final class SignatureTest extends UnitTestCase {
