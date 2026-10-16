@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\x402_pay\Unit;
 
+use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -248,6 +249,50 @@ final class PaymentGateTest extends UnitTestCase {
     $settlement = PaymentHeaders::decode($response->headers->get('PAYMENT-RESPONSE'));
     $this->assertTrue($settlement['success']);
     $this->assertSame(self::TX, $settlement['transaction']);
+  }
+
+  /**
+   * The same payment sent twice at once runs once (x402Scope SR5).
+   */
+  public function testPaymentAlreadyInUseIs409AndNothingRuns(): void {
+    $lock = $this->createMock(LockBackendInterface::class);
+    $lock->method('acquire')->willReturn(FALSE);
+    $lock->expects($this->never())->method('release');
+    $this->gate = new PaymentGate($this->facilitator, $this->log, NULL, NULL, NULL, $lock);
+    $this->facilitator->expects($this->never())->method('verify');
+    $this->facilitator->expects($this->never())->method('settle');
+
+    $response = $this->handle($this->request($this->payment()));
+
+    $this->assertSame(409, $response->getStatusCode());
+    $this->assertSame(0, $this->handlerCalls);
+  }
+
+  /**
+   * The claim is per authorization and let go once the sale is over.
+   */
+  public function testThePaymentIsClaimedAndThenReleased(): void {
+    $claims = [];
+    $lock = $this->createMock(LockBackendInterface::class);
+    $lock->method('acquire')->willReturnCallback(function (string $name) use (&$claims) {
+      $claims[] = $name;
+      return TRUE;
+    });
+    $released = [];
+    $lock->method('release')->willReturnCallback(function (string $name) use (&$released) {
+      $released[] = $name;
+    });
+    $this->gate = new PaymentGate($this->facilitator, $this->log, NULL, NULL, NULL, $lock);
+    $this->valid();
+    $this->facilitator->method('settle')->willReturn(['success' => TRUE, 'transaction' => self::TX]);
+
+    $this->assertSame(200, $this->handle($this->request($this->payment()))->getStatusCode());
+    $other = $this->payment();
+    $other['payload']['authorization']['nonce'] = '0x' . str_repeat('33', 32);
+    $this->handle($this->request($other));
+
+    $this->assertCount(2, array_unique($claims));
+    $this->assertSame($claims, $released);
   }
 
   /**

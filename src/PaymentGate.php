@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\x402_pay\Event\PaymentEvent;
 use Psr\EventDispatcher\EventDispatcherInterface;
@@ -33,6 +34,7 @@ class PaymentGate {
     private readonly ?ChainFacilitator $chain = NULL,
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
     private readonly ?Settings $settings = NULL,
+    private readonly ?LockBackendInterface $lock = NULL,
   ) {}
 
   /**
@@ -67,6 +69,28 @@ class PaymentGate {
       return $this->required($requirements, $resource, 'The payment does not match the requirements');
     }
 
+    // One authorization, one handler run at a time: the same payment sent
+    // N times at once would run the handler N times and send N settlements,
+    // all but one reverting on our gas (x402Scope SR5). Once it settles the
+    // nonce is spent on chain, so verify refuses it from then on.
+    $auth = $payment['payload']['authorization'] ?? [];
+    $claim = 'x402_pay.payment:' . hash('sha256', strtolower(($auth['from'] ?? '') . ':' . ($auth['nonce'] ?? '')));
+    // Longer than the slowest handler (10 min) plus settling.
+    if ($this->lock && !$this->lock->acquire($claim, 900)) {
+      return new JsonResponse(['error' => 'This payment is already being used'], 409);
+    }
+    try {
+      return $this->charge($request, $requirements, $resource, $seller, $handler, $payment);
+    }
+    finally {
+      $this->lock?->release($claim);
+    }
+  }
+
+  /**
+   * Verify, run the handler, settle: handle() once the payment is claimed.
+   */
+  private function charge(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler, array $payment): Response {
     // Our own facilitator for the networks it settles; Circle for the rest.
     $facilitator = $this->chain?->handles($requirements['network']) ? $this->chain : $this->facilitator;
     $this->timings = [];
