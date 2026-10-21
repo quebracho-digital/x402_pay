@@ -379,6 +379,34 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * The price event sells one entity on another network than the field's.
+   */
+  public function testThePriceEventChoosesTheNetwork(): void {
+    $refused = NULL;
+    $this->listen(function (PriceEvent $e) use (&$refused) {
+      try {
+        $e->setNetwork('solana:nowhere');
+      }
+      catch (\InvalidArgumentException $exception) {
+        $refused = $exception->getMessage();
+      }
+      // cspell:disable-next-line
+      $e->setNetwork('solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1');
+      // cspell:disable-next-line
+      $e->setPayTo('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM');
+    });
+    $accepts = $this->discovery()['items'][0]['accepts'][0];
+    // cspell:disable
+    $this->assertSame([
+      'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
+    ], [$accepts['network'], $accepts['asset'], $accepts['payTo']]);
+    // cspell:enable
+    $this->assertSame('Unknown network solana:nowhere.', $refused);
+  }
+
+  /**
    * Slow products give the buyer more time to pay.
    */
   public function testSlowProductsGiveTheBuyerMoreTimeToPay(): void {

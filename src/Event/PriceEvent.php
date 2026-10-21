@@ -50,6 +50,11 @@ final class PriceEvent extends Event {
    */
   private int $timeout = Networks::TIMEOUT;
 
+  /**
+   * The network sold on, or NULL for the field's.
+   */
+  private ?string $network = NULL;
+
   public function __construct(
     public readonly FieldableEntityInterface $entity,
     public readonly X402PriceItem $item,
@@ -174,6 +179,25 @@ final class PriceEvent extends Event {
    */
   public function timeout(): int {
     return $this->timeout;
+  }
+
+  /**
+   * Sells on another network than the field's: one of Networks::ALL.
+   *
+   * On Solana, pay an address (setPayTo()): no key here settles there.
+   *
+   * @throws \InvalidArgumentException
+   *   A network Networks does not list.
+   */
+  public function setNetwork(string $network): void {
+    $this->network = isset(Networks::ALL[$network]) ? $network : throw new \InvalidArgumentException("Unknown network $network.");
+  }
+
+  /**
+   * The network sold on, or NULL for the field's.
+   */
+  public function network(): ?string {
+    return $this->network;
   }
 
 }

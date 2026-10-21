@@ -104,7 +104,7 @@ class Delivery {
    *   No usable seller, or a price the network cannot charge.
    */
   public function requirements(PriceEvent $quote, X402PriceItem $item): array {
-    return Networks::requirements((string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
+    return Networks::requirements($quote->network() ?? (string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
   }
 
   /**

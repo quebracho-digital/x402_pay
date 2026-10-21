@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use GuzzleHttp\ClientInterface;
+
 /**
  * A buyer's x402 payment on Solana: one USDC transfer, built and signed.
  *
@@ -143,14 +145,46 @@ final class Solana {
   }
 
   /**
+   * The transaction that pays the requirements, as x402's payload carries it.
+   *
+   * The blockhash and memo the seller suggested, else the node's latest
+   * and a random nonce.
+   *
+   * @param \GuzzleHttp\ClientInterface $http_client
+   *   To ask the network's node for a blockhash.
+   * @param array $requirements
+   *   One PaymentRequirements on a Solana network of Networks, its USDC.
+   * @param string $buyer
+   *   The buyer's address.
+   * @param \Drupal\x402_pay\SolanaKey|null $key
+   *   The buyer's key, to sign it; none leaves it for their wallet.
+   *
+   * @throws \RuntimeException
+   *   A token Networks does not list, or the node failed.
+   */
+  public static function pay(ClientInterface $http_client, array $requirements, string $buyer, ?SolanaKey $key = NULL): string {
+    $network = Networks::ALL[$requirements['network']] ?? NULL;
+    // ponytail: the tokens in Networks only; another mint's decimals come
+    // from getTokenSupply if a seller ever asks for one.
+    if (($network['asset'] ?? NULL) !== $requirements['asset']) {
+      throw new \RuntimeException("Unknown token {$requirements['asset']} on {$requirements['network']}.");
+    }
+    $blockhash = $requirements['extra']['recentBlockhash']
+      ?? (new Rpc($http_client, $network['rpc']))('getLatestBlockhash', [['commitment' => 'confirmed']])['value']['blockhash'];
+    $memo = $requirements['extra']['memo'] ?? bin2hex(random_bytes(16));
+    return self::transaction(self::message($requirements, $buyer, $blockhash, $network['decimals'], $memo), $key);
+  }
+
+  /**
    * The transaction, signed by the buyer, as x402's payload carries it.
    *
    * @return string
    *   Base64 of the wire transaction; the fee payer's signature still
-   *   empty, for the facilitator to add.
+   *   empty, for the facilitator to add. Without a key, the buyer's too:
+   *   for a wallet in the browser to sign.
    */
-  public static function transaction(string $message, SolanaKey $buyer): string {
-    return base64_encode(self::length(2) . str_repeat("\0", 64) . $buyer->sign($message) . $message);
+  public static function transaction(string $message, ?SolanaKey $buyer = NULL): string {
+    return base64_encode(self::length(2) . str_repeat("\0", 64) . ($buyer?->sign($message) ?? str_repeat("\0", 64)) . $message);
   }
 
   /**

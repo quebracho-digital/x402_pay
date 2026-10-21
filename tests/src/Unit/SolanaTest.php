@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\x402_pay\Unit;
 
+use Drupal\Core\Flood\FloodInterface;
 use Drupal\Tests\UnitTestCase;
+use Drupal\x402_pay\Controller\SolanaTransactionController;
 use Drupal\x402_pay\Buyer;
 use Drupal\x402_pay\PaymentHeaders;
 use Drupal\x402_pay\Solana;
@@ -15,6 +17,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\HttpFoundation\Request;
 
 // cspell:disable
 /**
@@ -116,6 +119,46 @@ final class SolanaTest extends UnitTestCase {
     $transfer = "\x05\x04\x02\x04\x03\x01\x0a\x0c" . pack('P', 10000) . "\x06";
     $this->assertSame("\x04\x06\x00\x05\x02" . pack('V', Solana::COMPUTE_UNITS) . "\x06\x00\x09\x03" . pack('P', 1) . $transfer . "\x07\x00\x20", substr($instructions, 0, 41));
     $this->assertMatchesRegularExpression('/^[0-9a-f]{32}\x00$/', substr($instructions, 41));
+  }
+
+  /**
+   * A wallet in the browser gets the same transaction, unsigned.
+   */
+  public function testBrowserWalletGetsItUnsigned(): void {
+    $history = [];
+    $stack = HandlerStack::create(new MockHandler([
+      new Response(200, [], json_encode(['result' => ['value' => ['blockhash' => self::REQUIREMENTS['extra']['recentBlockhash']]]])),
+    ]));
+    $stack->push(Middleware::history($history));
+    $flood = $this->createMock(FloodInterface::class);
+    $flood->method('isAllowed')->willReturn(TRUE);
+    $controller = new SolanaTransactionController(new Client(['handler' => $stack]), $flood);
+    $buyer = 'BqRWCWor1ZqdnKPzuQXB6TdqDp1bzpkEx5UDasMM2KSu';
+    $post = fn(array $body) => $controller(Request::create('/x402/solana/transaction', 'POST', content: json_encode($body)));
+
+    // No blockhash suggested: the node's latest.
+    $requirements = self::REQUIREMENTS;
+    unset($requirements['extra']['recentBlockhash']);
+    $response = $post(['accepted' => $requirements, 'buyer' => $buyer]);
+    $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+    $this->assertSame('getLatestBlockhash', json_decode((string) $history[0]['request']->getBody(), TRUE)['method']);
+    $wire = base64_decode(json_decode((string) $response->getContent(), TRUE)['transaction']);
+    // Both signatures empty; the message pays from the buyer's account.
+    $this->assertSame("\x02" . str_repeat("\0", 128), substr($wire, 0, 129));
+    $message = substr($wire, 129);
+    $memo = substr($message, -33, 32);
+    $this->assertSame(Solana::message(self::REQUIREMENTS, $buyer, self::REQUIREMENTS['extra']['recentBlockhash'], 6, $memo), $message);
+
+    // Not a Solana payment of this site's: refused, no node asked.
+    foreach ([
+      ['network' => 'eip155:5042'] + self::REQUIREMENTS,
+      ['asset' => self::REQUIREMENTS['payTo']] + self::REQUIREMENTS,
+      ['amount' => '1e9'] + self::REQUIREMENTS,
+    ] as $wrong) {
+      $this->assertSame(400, $post(['accepted' => $wrong, 'buyer' => $buyer])->getStatusCode());
+    }
+    $this->assertSame(400, $post(['accepted' => self::REQUIREMENTS, 'buyer' => '0x1234'])->getStatusCode());
+    $this->assertCount(1, $history);
   }
 
 }

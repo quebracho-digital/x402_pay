@@ -26,3 +26,13 @@ x402_pay.settings:
     _title: 'x402 Pay'
   requirements:
     _permission: 'administer x402 pay'
+
+x402_pay.solana_transaction:
+  path: '/x402/solana/transaction'
+  defaults:
+    _controller: '\Drupal\x402_pay\Controller\SolanaTransactionController'
+  methods: [POST]
+  requirements:
+    # Public: it builds bytes for the visitor's own wallet to sign; flood
+    # limited, since each asks the node for a blockhash.
+    _access: 'TRUE'

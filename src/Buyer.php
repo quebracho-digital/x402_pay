@@ -135,21 +135,11 @@ class Buyer {
    *   A token this module does not know, or no node to ask a blockhash.
    */
   private function solana(array $required, array $req): array {
-    $network = Networks::ALL[$req['network']] ?? NULL;
-    // ponytail: the tokens in Networks only; another mint's decimals come
-    // from getTokenSupply if a seller ever asks for one.
-    if (($network['asset'] ?? NULL) !== $req['asset']) {
-      throw new \RuntimeException("Unknown token {$req['asset']} on {$req['network']}.");
-    }
-    $blockhash = $req['extra']['recentBlockhash']
-      ?? (new Rpc($this->httpClient, $network['rpc']))('getLatestBlockhash', [['commitment' => 'confirmed']])['value']['blockhash'];
-    $memo = $req['extra']['memo'] ?? bin2hex(random_bytes(16));
-    $message = Solana::message($req, $this->wallet->address(), $blockhash, $network['decimals'], $memo);
     return [
       'x402Version' => 2,
       'resource' => $required['resource'],
       'accepted' => $req,
-      'payload' => ['transaction' => Solana::transaction($message, $this->wallet)],
+      'payload' => ['transaction' => Solana::pay($this->httpClient, $req, $this->wallet->address(), $this->wallet)],
     ];
   }
 
