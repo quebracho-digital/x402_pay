@@ -104,7 +104,12 @@ class Delivery {
    *   No usable seller, or a price the network cannot charge.
    */
   public function requirements(PriceEvent $quote, X402PriceItem $item): array {
-    return Networks::requirements($quote->network() ?? (string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
+    $requirements = Networks::requirements($quote->network() ?? (string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
+    if ($quote->settlesFirst()) {
+      // Announced: a client must know its money moves before the delivery.
+      $requirements['extra']['paymentFlow'] = 'upfront';
+    }
+    return $requirements;
   }
 
   /**

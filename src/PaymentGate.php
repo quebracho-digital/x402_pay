@@ -115,6 +115,9 @@ class PaymentGate {
       default => $this->facilitator,
     };
     $this->timings = [];
+    if (($requirements['extra']['paymentFlow'] ?? NULL) === 'upfront') {
+      return $this->upfront($request, $requirements, $resource, $seller, $handler, $payment, $facilitator);
+    }
     try {
       $verified = $this->timed('verify', fn() => $facilitator->verify($payment, $requirements, $seller));
     }
@@ -177,6 +180,47 @@ class PaymentGate {
       'transaction' => $settlement['transaction'],
       'network' => $settlement['network'] ?? $requirements['network'],
       'payer' => $settlement['payer'] ?? $entry['payer'],
+    ]));
+    return $this->withTimings($response);
+  }
+
+  /**
+   * Settle, then run the handler: x402's `upfront` flow (PriceEvent).
+   *
+   * No verify: settling checks the payment. Once settled the buyer has
+   * paid, so a failing handler is logged settled with its status, for a
+   * refund by hand.
+   */
+  private function upfront(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler, array $payment, CircleFacilitator|ChainFacilitator|RemoteFacilitator $facilitator): Response {
+    try {
+      $settlement = $this->timed('settle', fn() => $facilitator->settle($payment, $requirements, $seller));
+    }
+    catch (FacilitatorException $e) {
+      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
+    }
+    if (empty($settlement['success'])) {
+      // Nothing moved: the buyer may pay again.
+      return $this->withTimings($this->required($requirements, $resource, $settlement['errorReason'] ?? 'settlement_failed'));
+    }
+    $response = $this->timed('handler', $handler);
+    $this->record($request, [
+      'status' => 'settled',
+      'transaction' => $settlement['transaction'],
+      'payer' => $settlement['payer'] ?? NULL,
+      'handler_status' => $response->getStatusCode(),
+      'error' => $response->isSuccessful() ? NULL : 'delivery failed after settling: refund',
+      'resource' => $resource['url'],
+      'network' => $requirements['network'],
+      'amount' => $requirements['amount'],
+      'pay_to' => $requirements['payTo'],
+      'entity_type' => $resource['entity_type'] ?? NULL,
+      'entity_id' => $resource['entity_id'] ?? NULL,
+    ]);
+    $response->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode([
+      'success' => TRUE,
+      'transaction' => $settlement['transaction'],
+      'network' => $settlement['network'] ?? $requirements['network'],
+      'payer' => $settlement['payer'] ?? NULL,
     ]));
     return $this->withTimings($response);
   }

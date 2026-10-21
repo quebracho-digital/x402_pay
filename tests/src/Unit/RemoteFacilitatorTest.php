@@ -154,6 +154,45 @@ final class RemoteFacilitatorTest extends UnitTestCase {
   }
 
   /**
+   * Upfront: settle, then deliver; no verify, and no delivery unpaid.
+   */
+  public function testUpfrontSettlesBeforeTheHandlerRuns(): void {
+    $settled = new Psr7Response(200, [], json_encode([
+      'success' => TRUE,
+      'transaction' => self::TX,
+      'network' => self::NETWORK,
+      'payer' => self::BUYER,
+    ]));
+    $refused = new Psr7Response(400, [], json_encode([
+      'success' => FALSE,
+      'errorReason' => 'transaction_simulation_failed',
+    ]));
+    $gate = $this->gate($this->remote(), $this->supported(), $settled, $refused);
+    $requirements = Networks::requirements(self::NETWORK, '0.01', self::PAY_TO);
+    $requirements['extra']['paymentFlow'] = 'upfront';
+    $accepted = ['extra' => ['feePayer' => self::FEE_PAYER] + $requirements['extra']] + $requirements;
+
+    // The handler runs after the settlement, which the buyer gets back.
+    $order = [];
+    $handler = function () use (&$order) {
+      $order[] = 'handler: ' . count($this->history);
+      return new JsonResponse(['ok' => TRUE]);
+    };
+    $paid = $gate->handle($this->request($accepted), $requirements, ['url' => 'https://ombu.ddev.site/paid'], NULL, $handler);
+    $this->assertSame(200, $paid->getStatusCode(), (string) $paid->getContent());
+    $this->assertSame(self::TX, PaymentHeaders::decode($paid->headers->get(PaymentHeaders::RESPONSE))['transaction']);
+    $this->assertSame(['handler: 2'], $order, 'After /supported and /settle.');
+    $this->assertSame(self::URL . '/settle', (string) $this->history[1]['request']->getUri());
+
+    // A payment that does not settle delivers nothing.
+    $response = $gate->handle($this->request($accepted), $requirements, ['url' => 'https://ombu.ddev.site/paid'], NULL, $handler);
+    $this->assertSame(402, $response->getStatusCode());
+    $this->assertSame('transaction_simulation_failed', json_decode((string) $response->getContent(), TRUE)['error']);
+    $this->assertCount(1, $order);
+    $this->assertCount(3, $this->history, 'Never /verify.');
+  }
+
+  /**
    * A refusal sent as a 4xx with an x402 body is a refusal, not an outage.
    */
   public function testRefusalInA4xxIsAnAnswer(): void {

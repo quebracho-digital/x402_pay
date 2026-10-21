@@ -55,6 +55,11 @@ final class PriceEvent extends Event {
    */
   private ?string $network = NULL;
 
+  /**
+   * Whether the payment settles before the delivery (x402's `upfront`).
+   */
+  private bool $settleFirst = FALSE;
+
   public function __construct(
     public readonly FieldableEntityInterface $entity,
     public readonly X402PriceItem $item,
@@ -198,6 +203,26 @@ final class PriceEvent extends Event {
    */
   public function network(): ?string {
     return $this->network;
+  }
+
+  /**
+   * Settles the payment first, then delivers: x402's `upfront` flow.
+   *
+   * For a delivery that outlives the buyer's payment, e.g. a slow product
+   * on Solana, whose payment dies with its blockhash (~60–90 s) whatever
+   * the timeout says. The buyer pays even if the delivery then fails: check
+   * the input before (a 4xx at the door costs nothing), and refund by hand
+   * what the log shows settled with a failed delivery.
+   */
+  public function settleFirst(): void {
+    $this->settleFirst = TRUE;
+  }
+
+  /**
+   * Whether the payment settles before the delivery.
+   */
+  public function settlesFirst(): bool {
+    return $this->settleFirst;
   }
 
 }

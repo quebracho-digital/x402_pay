@@ -407,6 +407,15 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * A sale that settles first says so in its 402.
+   */
+  public function testSettlingFirstIsAnnounced(): void {
+    $this->assertArrayNotHasKey('paymentFlow', $this->required('/x402/entity_test/1')['accepts'][0]['extra']);
+    $this->listen(fn(PriceEvent $e) => $e->settleFirst());
+    $this->assertSame('upfront', $this->required('/x402/entity_test/1')['accepts'][0]['extra']['paymentFlow']);
+  }
+
+  /**
    * Slow products give the buyer more time to pay.
    */
   public function testSlowProductsGiveTheBuyerMoreTimeToPay(): void {
