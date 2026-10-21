@@ -16,12 +16,18 @@ use Drupal\x402_pay\Networks;
 #[ViewsField('x402_transaction')]
 class X402Transaction extends FieldPluginBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public function query(): void {
     $this->ensureMyTable();
     $this->addAdditionalFields(['network']);
     parent::query();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function render(ResultRow $values) {
     $tx = (string) $this->getValue($values);
     if ($tx === '') {
@@ -29,9 +35,15 @@ class X402Transaction extends FieldPluginBase {
     }
     $explorer = Networks::ALL[$this->getValue($values, 'network')]['explorer'] ?? NULL;
     $short = substr($tx, 0, 10) . '…';
-    return $explorer
-      ? ['#type' => 'link', '#title' => $short, '#url' => Url::fromUri($explorer . $tx), '#attributes' => ['title' => $tx]]
-      : ['#plain_text' => $short];
+    if (!$explorer) {
+      return ['#plain_text' => $short];
+    }
+    return [
+      '#type' => 'link',
+      '#title' => $short,
+      '#url' => Url::fromUri($explorer . $tx),
+      '#attributes' => ['title' => $tx],
+    ];
   }
 
 }

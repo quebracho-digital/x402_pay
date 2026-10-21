@@ -33,6 +33,7 @@ final class Networks {
       'rpc' => 'https://rpc.mainnet.arc.io',
       'explorer' => 'https://explorer.arc.io/tx/',
     ],
+    // cspell:disable-next-line
     'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' => [
       'label' => 'Solana devnet (USDC)',
       // cspell:disable-next-line
@@ -44,6 +45,7 @@ final class Networks {
       // away; explorers put the cluster after the hash, links put it before.
       'explorer' => 'https://explorer.solana.com/tx/',
     ],
+    // cspell:disable-next-line
     'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' => [
       'label' => 'Solana (USDC)',
       // cspell:disable-next-line

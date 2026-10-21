@@ -20,6 +20,7 @@ final class Solana {
   /**
    * Bitcoin's base58 alphabet, which Solana uses.
    */
+  // cspell:disable-next-line
   public const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
   /**

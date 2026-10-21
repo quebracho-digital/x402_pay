@@ -9,6 +9,7 @@ use Drupal\Tests\BrowserTestBase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
+// cspell:ignore WTRAB
 /**
  * The settings form: facilitator access and the sweep.
  */

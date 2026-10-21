@@ -101,11 +101,20 @@ class Buyer {
       'nonce' => '0x' . bin2hex(random_bytes(32)),
     ];
     $digest = Eip712::hash(
-      ['name' => $req['extra']['name'], 'version' => $req['extra']['version'], 'chainId' => (int) explode(':', $req['network'])[1], 'verifyingContract' => $req['asset']],
+      [
+        'name' => $req['extra']['name'],
+        'version' => $req['extra']['version'],
+        'chainId' => (int) explode(':', $req['network'])[1],
+        'verifyingContract' => $req['asset'],
+      ],
       [
         'TransferWithAuthorization' => [
-        ['name' => 'from', 'type' => 'address'], ['name' => 'to', 'type' => 'address'], ['name' => 'value', 'type' => 'uint256'],
-        ['name' => 'validAfter', 'type' => 'uint256'], ['name' => 'validBefore', 'type' => 'uint256'], ['name' => 'nonce', 'type' => 'bytes32'],
+          ['name' => 'from', 'type' => 'address'],
+          ['name' => 'to', 'type' => 'address'],
+          ['name' => 'value', 'type' => 'uint256'],
+          ['name' => 'validAfter', 'type' => 'uint256'],
+          ['name' => 'validBefore', 'type' => 'uint256'],
+          ['name' => 'nonce', 'type' => 'bytes32'],
         ],
       ],
       'TransferWithAuthorization',

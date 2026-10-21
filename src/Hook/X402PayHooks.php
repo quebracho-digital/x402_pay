@@ -64,25 +64,53 @@ class X402PayHooks {
       'argument' => ['id' => 'string'],
       'sort' => ['id' => 'standard'],
     ];
-    return ['x402_pay_log' => [
-      'table' => [
-        'group' => t('x402 payments'),
-        'base' => ['field' => 'id', 'title' => t('x402 payments'), 'help' => t('Every paid request: settled, not settled or failed.')],
+    return [
+      'x402_pay_log' => [
+        'table' => [
+          'group' => t('x402 payments'),
+          'base' => [
+            'field' => 'id',
+            'title' => t('x402 payments'),
+            'help' => t('Every paid request: settled, not settled or failed.'),
+          ],
+        ],
+        'id' => [
+          'title' => t('ID'),
+          'help' => t('The log entry.'),
+          'field' => ['id' => 'numeric'],
+          'sort' => ['id' => 'standard'],
+          'filter' => ['id' => 'numeric'],
+        ],
+        'created' => [
+          'title' => t('Time'),
+          'help' => t('When it was paid.'),
+          'field' => ['id' => 'date'],
+          'sort' => ['id' => 'date'],
+          'filter' => ['id' => 'date'],
+        ],
+        'resource' => ['field' => ['id' => 'url']] + $string(t('Resource'), t('The URL bought.')),
+        'network' => $string(t('Network'), t('CAIP-2, e.g. eip155:5042 (Arc).')),
+        'amount' => [
+          'title' => t('Amount'),
+          'help' => t('In the token, e.g. 0.01 USDC.'),
+          'field' => ['id' => 'x402_amount'],
+          'sort' => ['id' => 'standard'],
+        ],
+        'pay_to' => $string(t('Paid to'), t("The seller's address.")),
+        'payer' => $string(t('Payer'), t("The buyer's address.")),
+        'status' => $string(t('Status'), t('settled, not_settled or failed.')),
+        'transaction' => ['field' => ['id' => 'x402_transaction']] + $string(t('Transaction'), t('Its hash, linked to the explorer.')),
+        'handler_status' => [
+          'title' => t('Delivery status'),
+          'help' => t('The HTTP status the seller answered.'),
+          'field' => ['id' => 'numeric'],
+          'filter' => ['id' => 'numeric'],
+        ],
+        'error' => $string(t('Error'), t('Why it was not settled.')),
+        'entity_type' => $string(t('Entity type'), t('What was sold: its type…')),
+        'entity_id' => $string(t('Entity ID'), t('…and its id.')),
       ],
-      'id' => ['title' => t('ID'), 'help' => t('The log entry.'), 'field' => ['id' => 'numeric'], 'sort' => ['id' => 'standard'], 'filter' => ['id' => 'numeric']],
-      'created' => ['title' => t('Time'), 'help' => t('When it was paid.'), 'field' => ['id' => 'date'], 'sort' => ['id' => 'date'], 'filter' => ['id' => 'date']],
-      'resource' => ['field' => ['id' => 'url']] + $string(t('Resource'), t('The URL bought.')),
-      'network' => $string(t('Network'), t('CAIP-2, e.g. eip155:5042 (Arc).')),
-      'amount' => ['title' => t('Amount'), 'help' => t('In the token, e.g. 0.01 USDC.'), 'field' => ['id' => 'x402_amount'], 'sort' => ['id' => 'standard']],
-      'pay_to' => $string(t('Paid to'), t('The seller\'s address.')),
-      'payer' => $string(t('Payer'), t('The buyer\'s address.')),
-      'status' => $string(t('Status'), t('settled, not_settled or failed.')),
-      'transaction' => ['field' => ['id' => 'x402_transaction']] + $string(t('Transaction'), t('Its hash, linked to the explorer.')),
-      'handler_status' => ['title' => t('Delivery status'), 'help' => t('The HTTP status the seller answered.'), 'field' => ['id' => 'numeric'], 'filter' => ['id' => 'numeric']],
-      'error' => $string(t('Error'), t('Why it was not settled.')),
-      'entity_type' => $string(t('Entity type'), t('What was sold: its type…')),
-      'entity_id' => $string(t('Entity ID'), t('…and its id.')),
-    ]];
+    ];
   }
 
 }

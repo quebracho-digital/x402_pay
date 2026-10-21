@@ -58,7 +58,12 @@ final class BuyerTest extends UnitTestCase {
    * A 402 asking for REQUIREMENTS.
    */
   private function required(): Response {
-    return new Response(402, [PaymentHeaders::REQUIRED => PaymentHeaders::encode(['x402Version' => 2, 'resource' => ['url' => 'https://example.com/x'], 'accepts' => [self::REQUIREMENTS]])]);
+    $required = [
+      'x402Version' => 2,
+      'resource' => ['url' => 'https://example.com/x'],
+      'accepts' => [self::REQUIREMENTS],
+    ];
+    return new Response(402, [PaymentHeaders::REQUIRED => PaymentHeaders::encode($required)]);
   }
 
   /**
@@ -85,8 +90,12 @@ final class BuyerTest extends UnitTestCase {
       ['name' => 'USDC', 'version' => '2', 'chainId' => 5042002, 'verifyingContract' => self::REQUIREMENTS['asset']],
       [
         'TransferWithAuthorization' => [
-        ['name' => 'from', 'type' => 'address'], ['name' => 'to', 'type' => 'address'], ['name' => 'value', 'type' => 'uint256'],
-        ['name' => 'validAfter', 'type' => 'uint256'], ['name' => 'validBefore', 'type' => 'uint256'], ['name' => 'nonce', 'type' => 'bytes32'],
+          ['name' => 'from', 'type' => 'address'],
+          ['name' => 'to', 'type' => 'address'],
+          ['name' => 'value', 'type' => 'uint256'],
+          ['name' => 'validAfter', 'type' => 'uint256'],
+          ['name' => 'validBefore', 'type' => 'uint256'],
+          ['name' => 'nonce', 'type' => 'bytes32'],
         ],
       ],
       'TransferWithAuthorization',

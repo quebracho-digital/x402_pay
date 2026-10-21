@@ -134,7 +134,7 @@ class ChainFacilitator {
       // mainnet, 2026-10-15): the seller has already delivered, so try once
       // more, then look for the transaction by its own hash below. The same
       // raw transaction cannot pay twice (one nonce, one hash).
-      for ($try = 1; ; $try++) {
+      for ($try = 1;; $try++) {
         try {
           $result['transaction'] = $rpc('eth_sendRawTransaction', [$raw]);
           break;

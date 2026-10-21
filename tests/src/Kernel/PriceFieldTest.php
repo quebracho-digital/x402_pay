@@ -358,6 +358,7 @@ final class PriceFieldTest extends KernelTestBase {
    */
   public function testSolanaFieldSellsToItsAddress(): void {
     FieldConfig::loadByName('entity_test', 'entity_test', 'field_price')
+      // cspell:disable-next-line
       ->setSetting('network', 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1')
       ->setSetting('key_id', '')
       // cspell:disable-next-line

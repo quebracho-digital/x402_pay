@@ -232,7 +232,7 @@ final class ChainFacilitatorTest extends UnitTestCase {
   /**
    * A send the node refuses is retried, then found by its hash if it got in.
    */
-  public function testARefusedSendIsRetriedAndFoundByItsHash(): void {
+  public function testRefusedSendIsRetriedAndFoundByItsHash(): void {
     $result = $this->facilitator([
       'eth_gasPrice' => '0x1',
       'eth_estimateGas' => '0x1',
@@ -243,13 +243,13 @@ final class ChainFacilitatorTest extends UnitTestCase {
 
     $this->assertTrue($result['success']);
     $this->assertMatchesRegularExpression('/^0x[0-9a-f]{64}$/', $result['transaction']);
-    $this->assertSame(2, count(array_keys($this->methods(), 'eth_sendRawTransaction')));
+    $this->assertCount(2, array_keys($this->methods(), 'eth_sendRawTransaction'));
   }
 
   /**
    * Refused twice and not on chain: not a sale, with the node's reason.
    */
-  public function testARefusedSendNotOnChainIsNotSale(): void {
+  public function testRefusedSendNotOnChainIsNotSale(): void {
     $result = $this->facilitator([
       'eth_gasPrice' => '0x1',
       'eth_estimateGas' => '0x1',

@@ -214,7 +214,12 @@ class PaymentGate {
    * The 402 that asks for payment, as JSON and as PAYMENT-REQUIRED.
    */
   private function required(array $requirements, array $resource, string $error): Response {
-    $required = ['x402Version' => 2, 'error' => $error, 'resource' => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])), 'accepts' => [$requirements]];
+    $required = [
+      'x402Version' => 2,
+      'error' => $error,
+      'resource' => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
+      'accepts' => [$requirements],
+    ];
     $response = new JsonResponse($required, 402);
     $response->headers->set(PaymentHeaders::REQUIRED, PaymentHeaders::encode($required));
     return $response;

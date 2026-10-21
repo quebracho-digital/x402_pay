@@ -15,12 +15,18 @@ use Drupal\x402_pay\Networks;
 #[ViewsField('x402_amount')]
 class X402Amount extends FieldPluginBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public function query(): void {
     $this->ensureMyTable();
     $this->addAdditionalFields(['network']);
     parent::query();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function render(ResultRow $values) {
     $atomic = (string) $this->getValue($values);
     $decimals = Networks::ALL[$this->getValue($values, 'network')]['decimals'] ?? 6;

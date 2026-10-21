@@ -39,7 +39,12 @@ function x402_pay_schema(): array {
         'entity_id' => ['type' => 'varchar_ascii', 'length' => 64, 'description' => '…and its id.'],
       ],
       'primary key' => ['id'],
-      'indexes' => ['payer' => ['payer'], 'pay_to' => ['pay_to'], 'transaction' => ['transaction'], 'entity' => ['entity_type', 'entity_id']],
+      'indexes' => [
+        'payer' => ['payer'],
+        'pay_to' => ['pay_to'],
+        'transaction' => ['transaction'],
+        'entity' => ['entity_type', 'entity_id'],
+      ],
     ],
   ];
 }

@@ -30,6 +30,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[Group('x402_pay')]
 final class RemoteFacilitatorTest extends UnitTestCase {
 
+  // cspell:disable-next-line
   private const NETWORK = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
   private const URL = 'https://facilitator.example/x402';
   // cspell:disable-next-line
