@@ -221,7 +221,20 @@ class X402PriceItem extends FieldItemBase {
       return $seller->address();
     }
     $address = (string) $this->getSetting('pay_to');
-    return preg_match('/^0x[0-9a-fA-F]{40}$/', $address) ? Signer::checksum($address) : throw new \RuntimeException('The x402 price field has no seller key nor address.');
+    return match (TRUE) {
+      (bool) preg_match('/^0x[0-9a-fA-F]{40}$/', $address) => Signer::checksum($address),
+      self::isSolanaAddress($address) => $address,
+      default => throw new \RuntimeException('The x402 price field has no seller key nor address.'),
+    };
+  }
+
+  /**
+   * Whether it looks like a Solana address: 32 to 44 base58 characters.
+   *
+   * The shape only (ponytail): the facilitator refuses a wrong key.
+   */
+  public static function isSolanaAddress(string $address): bool {
+    return (bool) preg_match('/^[1-9A-HJ-NP-Za-km-z]{32,44}$/', $address);
   }
 
   /**
@@ -271,9 +284,9 @@ class X402PriceItem extends FieldItemBase {
       'pay_to' => [
         '#type' => 'textfield',
         '#title' => $this->t('Seller address'),
-        '#description' => $this->t('Without a key: the wallet paid, e.g. a cold wallet whose key is not on this site. Needs a Circle API key in the x402 settings, since the keyless trial signs every sale with the seller key.'),
+        '#description' => $this->t('Without a key: the wallet paid (EVM, or Solana in base58), e.g. a cold wallet whose key is not on this site. Settled by Circle, it needs a Circle API key in the x402 settings, since the keyless trial signs every sale with the seller key.'),
         '#default_value' => $this->getSetting('pay_to'),
-        '#maxlength' => 42,
+        '#maxlength' => 44,
         '#element_validate' => [[static::class, 'validatePayTo']],
         '#states' => ['visible' => [':input[name="settings[key_id]"]' => ['value' => '']]],
       ],
@@ -346,13 +359,27 @@ class X402PriceItem extends FieldItemBase {
    * Form validation: without a key, an address and a Circle API key.
    */
   public static function validatePayTo(array $element, FormStateInterface $form_state): void {
-    if ((string) $form_state->getValue(['settings', 'key_id']) !== '') {
+    $network = (string) $form_state->getValue(['settings', 'network']);
+    $key = (string) $form_state->getValue(['settings', 'key_id']);
+    $address = trim((string) $element['#value']);
+    // Seller keys are EVM keys: Solana sells to an address alone.
+    if (str_starts_with($network, 'solana:')) {
+      if ($key !== '' || !self::isSolanaAddress($address)) {
+        $form_state->setError($element, t('On Solana, no seller key: give the Solana address paid, in base58.'));
+      }
       return;
     }
-    if (!preg_match('/^0x[0-9a-fA-F]{40}$/', trim((string) $element['#value']))) {
+    if ($key !== '') {
+      return;
+    }
+    if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $address)) {
       $form_state->setError($element, t('Choose a seller key, or give the address paid: 0x followed by 40 hex characters.'));
     }
-    elseif (\Drupal::config('x402_pay.settings')->get('facilitator.auth') !== 'api_key') {
+    // Circle needs its API key to settle for an address alone; ours or
+    // another facilitator do not.
+    elseif (!\Drupal::service('x402_pay.chain_facilitator')->handles($network)
+      && !\Drupal::service('x402_pay.remote_facilitator')->handles($network)
+      && \Drupal::config('x402_pay.settings')->get('facilitator.auth') !== 'api_key') {
       $form_state->setError($element, t('Selling to an address alone needs a Circle API key: set it in the <a href=":url">x402 settings</a>, or choose a seller key.', [':url' => Url::fromRoute('x402_pay.settings')->toString()]));
     }
   }

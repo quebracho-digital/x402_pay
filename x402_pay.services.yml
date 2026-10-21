@@ -12,11 +12,14 @@ services:
   x402_pay.chain_facilitator:
     class: Drupal\x402_pay\ChainFacilitator
     arguments: ['@http_client', '@config.factory', '@key.repository', '@lock']
+  x402_pay.remote_facilitator:
+    class: Drupal\x402_pay\RemoteFacilitator
+    arguments: ['@http_client', '@config.factory', '@key.repository', '@cache.default']
   x402_pay.log:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher', '@settings', '@lock']
+    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher', '@settings', '@lock', '@x402_pay.remote_facilitator']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']

@@ -23,6 +23,18 @@ x402_pay.settings:
         own_key_id:
           type: string
           label: 'Gas wallet key (Key module id)'
+        remote:
+          type: sequence
+          label: 'Another x402 facilitator, per network (CAIP-2 id)'
+          sequence:
+            type: mapping
+            mapping:
+              url:
+                type: string
+                label: 'Base URL, before /verify, /settle and /supported'
+              key_id:
+                type: string
+                label: 'Bearer token (Key module id), if it asks for one'
     sweep:
       type: mapping
       label: 'Sweep seller wallets'

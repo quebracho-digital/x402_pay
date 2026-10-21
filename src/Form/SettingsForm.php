@@ -78,7 +78,7 @@ final class SettingsForm extends ConfigFormBase {
         '#type' => 'checkboxes',
         '#title' => $this->t('Networks this site settles itself'),
         '#description' => $this->t("Our own facilitator instead of Circle's: the site sends each buyer's signed transfer on chain. Sellers can be addresses alone."),
-        '#options' => array_map(fn($n) => $n['label'], Networks::ALL),
+        '#options' => array_map(fn($n) => $n['label'], array_filter(Networks::ALL, fn($id) => str_starts_with($id, 'eip155:'), ARRAY_FILTER_USE_KEY)),
         '#default_value' => $config->get('facilitator.own_networks') ?? [],
       ],
       'own_key_id' => [
@@ -89,7 +89,31 @@ final class SettingsForm extends ConfigFormBase {
         '#empty_option' => $this->t('- Choose a key -'),
         '#default_value' => $config->get('facilitator.own_key_id'),
       ],
+      'remote' => [
+        '#type' => 'details',
+        '#title' => $this->t('Another facilitator, per network'),
+        '#description' => $this->t("Any x402 facilitator, by its base URL (before /verify, /settle and /supported), e.g. https://x402.org/facilitator for Solana devnet. It settles the network unless this site does; Circle's settles the rest. On Solana it also pays the fees."),
+        '#open' => (bool) $config->get('facilitator.remote'),
+      ],
     ];
+    foreach (Networks::ALL as $network => $info) {
+      $form['facilitator']['remote'][$network] = [
+        '#type' => 'fieldset',
+        '#title' => $info['label'],
+        'url' => [
+          '#type' => 'url',
+          '#title' => $this->t('URL'),
+          '#default_value' => $config->get('facilitator.remote')[$network]['url'] ?? '',
+        ],
+        'key_id' => [
+          '#type' => 'key_select',
+          '#title' => $this->t('Bearer token'),
+          '#description' => $this->t('From the Key module, if the facilitator asks for one.'),
+          '#empty_option' => $this->t('- None -'),
+          '#default_value' => $config->get('facilitator.remote')[$network]['key_id'] ?? '',
+        ],
+      ];
+    }
 
     $sweep = $config->get('sweep') ?? [];
     $form['sweep'] = [
@@ -148,6 +172,11 @@ final class SettingsForm extends ConfigFormBase {
     if (array_filter($facilitator['own_networks']) && !$facilitator['own_key_id']) {
       $form_state->setErrorByName('facilitator][own_key_id', $this->t('Settling on chain needs a gas wallet.'));
     }
+    foreach (array_filter($facilitator['own_networks']) as $network) {
+      if (trim((string) $facilitator['remote'][$network]['url']) !== '') {
+        $form_state->setErrorByName("facilitator][remote][$network][url", $this->t('%network is settled by this site: leave its other facilitator empty.', ['%network' => Networks::ALL[$network]['label']]));
+      }
+    }
 
     $sweep = $form_state->getValue('sweep');
     $keys = array_values(array_filter($sweep['keys']));
@@ -189,6 +218,10 @@ final class SettingsForm extends ConfigFormBase {
         'api_key_id' => $facilitator['auth'] === 'api_key' ? (string) $facilitator['api_key_id'] : '',
         'own_networks' => array_values(array_filter($facilitator['own_networks'])),
         'own_key_id' => (string) $facilitator['own_key_id'],
+        'remote' => array_map(
+          fn($site) => ['url' => trim((string) $site['url']), 'key_id' => (string) $site['key_id']],
+          array_filter($facilitator['remote'], fn($site) => trim((string) $site['url']) !== ''),
+        ),
       ])
       ->set('sweep', [
         'enabled' => (bool) $sweep['enabled'],

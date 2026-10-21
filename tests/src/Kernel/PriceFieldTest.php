@@ -354,6 +354,30 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * On Solana a field sells to a base58 address, case kept, in USDC's mint.
+   */
+  public function testSolanaFieldSellsToItsAddress(): void {
+    FieldConfig::loadByName('entity_test', 'entity_test', 'field_price')
+      ->setSetting('network', 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1')
+      ->setSetting('key_id', '')
+      // cspell:disable-next-line
+      ->setSetting('pay_to', '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4')
+      ->save();
+    $this->resetFieldCaches();
+    $requirements = X402PriceItem::find(EntityTest::load(1))->requirements();
+    // cspell:disable-next-line
+    $this->assertSame('2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4', $requirements['payTo']);
+    // cspell:disable-next-line
+    $this->assertSame('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', $requirements['asset']);
+
+    // The price event keeps a Solana seller's case too.
+    // cspell:disable-next-line
+    $this->listen(fn(PriceEvent $e) => $e->setPayTo('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'));
+    // cspell:disable-next-line
+    $this->assertSame('9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', $this->discovery()['items'][0]['accepts'][0]['payTo']);
+  }
+
+  /**
    * Slow products give the buyer more time to pay.
    */
   public function testSlowProductsGiveTheBuyerMoreTimeToPay(): void {

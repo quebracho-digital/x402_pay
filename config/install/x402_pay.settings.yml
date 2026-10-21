@@ -7,12 +7,16 @@ agent_user_agents: 'GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Clau
 # wallet, since nothing here needs to sign for it.
 # own_networks: settled by this site itself, not Circle: it sends each
 # buyer's signed transfer from the gas wallet (own_key_id), which pays only
-# the gas (USDC on Arc).
+# the gas (USDC on Arc). EVM only.
+# remote: any other x402 facilitator, per network: {url, key_id}, key_id
+# a bearer token from the Key module when it asks for one. Solana is settled
+# this way. Ours first, then remote, then Circle.
 facilitator:
   auth: keyless
   api_key_id: ''
   own_networks: []
   own_key_id: ''
+  remote: {}
 # Keyless leaves seller keys on this server: cron moves what they collect
 # to a wallet whose key is not here. Arc only: its gas is USDC.
 sweep:

@@ -45,9 +45,11 @@ class ChainFacilitator {
 
   /**
    * Whether this site settles the network itself instead of Circle.
+   *
+   * EVM only: on Solana a remote facilitator settles (RemoteFacilitator).
    */
   public function handles(string $network): bool {
-    return in_array($network, $this->settings()['own_networks'] ?? [], TRUE);
+    return str_starts_with($network, 'eip155:') && in_array($network, $this->settings()['own_networks'] ?? [], TRUE);
   }
 
   /**

@@ -121,7 +121,8 @@ final class PriceEvent extends Event {
    * CircleFacilitator).
    */
   public function setPayTo(string $address): void {
-    $this->payTo = Signer::checksum($address);
+    // Base58 (Solana) is kept as is; checksumming is EVM's.
+    $this->payTo = X402PriceItem::isSolanaAddress($address) ? $address : Signer::checksum($address);
     $this->seller = NULL;
   }
 

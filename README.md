@@ -1,6 +1,6 @@
 # x402_pay
 
-Drupal charges in USDC on **Arc** over HTTP 402 (x402):
+Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 
 - **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per request; unpaid requests get a 402 with the payment
   requirements; verify and settle **only on a 2xx response**; a payment log
@@ -12,7 +12,13 @@ Drupal charges in USDC on **Arc** over HTTP 402 (x402):
     `transferWithAuthorization` from a gas wallet that pays only the gas
     (~87k gas: about 0.002 USDC on Arc mainnet). The token checks the
     signature, balance, time window and nonce; the site checks seller and
-    price. No third party, no permission.
+    price. No third party, no permission. EVM only.
+  - **Any other x402 facilitator**, by URL, for a network: `/verify`,
+    `/settle`, and `/supported` for the fee payer that sponsors a Solana
+    payment, which the 402 names (`extra.feePayer`); a bearer token from
+    the Key module if it asks for one. Solana is settled this way (e.g.
+    `https://x402.org/facilitator` on devnet). Ours first, then this one,
+    then Circle's.
 - **The `x402_price` field**: add it to any fieldable entity and agents pay
   to read it. Each field is one product: a view mode at a price.
   - **Settings:** price, network and seller key; `payTo` is the key's own

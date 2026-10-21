@@ -72,11 +72,23 @@ final class SettingsFormTest extends BrowserTestBase {
     $this->submitForm(['facilitator[own_networks][eip155:5042]' => TRUE, 'sweep[to]' => ''], 'Save configuration');
     $this->assertSession()->pageTextContains('Settling on chain needs a gas wallet.');
 
+    // Solana is not ours to settle; a network ours settles takes no other.
+    $this->assertSession()->fieldNotExists('facilitator[own_networks][solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1]');
+    $this->submitForm([
+      'facilitator[own_networks][eip155:5042]' => TRUE,
+      'facilitator[own_key_id]' => 'seller',
+      'facilitator[remote][eip155:5042][url]' => 'https://facilitator.example',
+      'sweep[to]' => '',
+    ], 'Save configuration');
+    $this->assertSession()->pageTextContains('Arc (USDC) is settled by this site: leave its other facilitator empty.');
+
     $this->submitForm([
       'facilitator[auth]' => 'api_key',
       'facilitator[api_key_id]' => 'circle',
       'facilitator[own_networks][eip155:5042]' => TRUE,
       'facilitator[own_key_id]' => 'seller',
+      'facilitator[remote][eip155:5042][url]' => '',
+      'facilitator[remote][solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1][url]' => 'https://x402.org/facilitator',
       'sweep[enabled]' => TRUE,
       'sweep[to]' => strtolower(self::COLD),
       'sweep[keys][seller]' => TRUE,
@@ -89,6 +101,9 @@ final class SettingsFormTest extends BrowserTestBase {
       'api_key_id' => 'circle',
       'own_networks' => ['eip155:5042'],
       'own_key_id' => 'seller',
+      'remote' => [
+        'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' => ['url' => 'https://x402.org/facilitator', 'key_id' => ''],
+      ],
     ], $config->get('facilitator'));
     $this->assertSame(['enabled' => TRUE, 'to' => self::COLD, 'keys' => ['seller'], 'min' => '0.5', 'interval' => 21600], $config->get('sweep'));
   }

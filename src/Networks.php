@@ -12,8 +12,9 @@ final class Networks {
   /**
    * CAIP-2 network => its USDC.
    *
-   * `extra` is the token's EIP-712 domain; `rpc` a public node, for sweeping;
-   * `explorer` where people see a transaction.
+   * `extra` is the token's EIP-712 domain (on Solana the facilitator adds
+   * its fee payer); `rpc` a public node, for sweeping; `explorer` where
+   * people see a transaction.
    */
   public const ALL = [
     'eip155:5042002' => [
@@ -31,6 +32,26 @@ final class Networks {
       'extra' => ['name' => 'USDC', 'version' => '2'],
       'rpc' => 'https://rpc.mainnet.arc.io',
       'explorer' => 'https://explorer.arc.io/tx/',
+    ],
+    'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' => [
+      'label' => 'Solana devnet (USDC)',
+      // cspell:disable-next-line
+      'asset' => '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      'decimals' => 6,
+      'extra' => [],
+      'rpc' => 'https://api.devnet.solana.com',
+      // ponytail: opens on mainnet, where devnet's tx is one cluster switch
+      // away; explorers put the cluster after the hash, links put it before.
+      'explorer' => 'https://explorer.solana.com/tx/',
+    ],
+    'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' => [
+      'label' => 'Solana (USDC)',
+      // cspell:disable-next-line
+      'asset' => 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      'decimals' => 6,
+      'extra' => [],
+      'rpc' => 'https://api.mainnet-beta.solana.com',
+      'explorer' => 'https://solscan.io/tx/',
     ],
   ];
 

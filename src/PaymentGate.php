@@ -35,6 +35,7 @@ class PaymentGate {
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
     private readonly ?Settings $settings = NULL,
     private readonly ?LockBackendInterface $lock = NULL,
+    private readonly ?RemoteFacilitator $remote = NULL,
   ) {}
 
   /**
@@ -55,6 +56,17 @@ class PaymentGate {
    *   Produces the paid response. Runs only after the payment verified.
    */
   public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
+    // On Solana the buyer builds the transaction around the fee payer of
+    // the facilitator that sponsors it, so the 402 names it.
+    if (str_starts_with($requirements['network'], 'solana:') && empty($requirements['extra']['feePayer'])) {
+      try {
+        $requirements['extra']['feePayer'] = $this->remote?->feePayer($requirements['network'])
+          ?? throw new FacilitatorException('it names no fee payer for ' . $requirements['network']);
+      }
+      catch (FacilitatorException $e) {
+        return new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502);
+      }
+    }
     $header = $request->headers->get(PaymentHeaders::SIGNATURE);
     if ($header === NULL) {
       return $this->required($requirements, $resource, 'PAYMENT-SIGNATURE header is required');
@@ -73,8 +85,12 @@ class PaymentGate {
     // N times at once would run the handler N times and send N settlements,
     // all but one reverting on our gas (x402Scope SR5). Once it settles the
     // nonce is spent on chain, so verify refuses it from then on.
-    $auth = $payment['payload']['authorization'] ?? [];
-    $claim = 'x402_pay.payment:' . hash('sha256', strtolower(($auth['from'] ?? '') . ':' . ($auth['nonce'] ?? '')));
+    // EVM: the authorization's signer and nonce. Solana: the signed
+    // transaction itself, which lands once.
+    $auth = $payment['payload']['authorization'] ?? NULL;
+    $claim = 'x402_pay.payment:' . hash('sha256', $auth
+      ? strtolower(($auth['from'] ?? '') . ':' . ($auth['nonce'] ?? ''))
+      : (string) ($payment['payload']['transaction'] ?? ''));
     // Longer than the slowest handler (10 min) plus settling.
     if ($this->lock && !$this->lock->acquire($claim, 900)) {
       return new JsonResponse(['error' => 'This payment is already being used'], 409);
@@ -91,8 +107,13 @@ class PaymentGate {
    * Verify, run the handler, settle: handle() once the payment is claimed.
    */
   private function charge(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler, array $payment): Response {
-    // Our own facilitator for the networks it settles; Circle for the rest.
-    $facilitator = $this->chain?->handles($requirements['network']) ? $this->chain : $this->facilitator;
+    // Our own facilitator for the networks it settles, then the one set for
+    // the network, then Circle.
+    $facilitator = match (TRUE) {
+      (bool) $this->chain?->handles($requirements['network']) => $this->chain,
+      (bool) $this->remote?->handles($requirements['network']) => $this->remote,
+      default => $this->facilitator,
+    };
     $this->timings = [];
     try {
       $verified = $this->timed('verify', fn() => $facilitator->verify($payment, $requirements, $seller));
@@ -202,8 +223,8 @@ class PaymentGate {
   /**
    * Whether the buyer pays exactly what we ask.
    *
-   * Same scheme, chain, token, seller and amount. Addresses compare
-   * case-insensitively.
+   * Same scheme, chain, token, seller and amount. EVM addresses compare
+   * case-insensitively; base58 (Solana) is case-sensitive.
    */
   private function matches(array $accepted, array $requirements): bool {
     foreach (['scheme', 'network', 'amount'] as $k) {
@@ -211,8 +232,10 @@ class PaymentGate {
         return FALSE;
       }
     }
+    $evm = str_starts_with($requirements['network'], 'eip155:');
     foreach (['asset', 'payTo'] as $k) {
-      if (strcasecmp((string) ($accepted[$k] ?? ''), (string) $requirements[$k]) !== 0) {
+      [$a, $b] = [(string) ($accepted[$k] ?? ''), (string) $requirements[$k]];
+      if ($evm ? strcasecmp($a, $b) !== 0 : $a !== $b) {
         return FALSE;
       }
     }
