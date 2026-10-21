@@ -7,6 +7,7 @@
     "php": "^8.3",
     "drupal/key": "^1.18",
     "ext-gmp": "*",
+    "ext-sodium": "*",
     "kornrunner/keccak": "^1.1",
     "kornrunner/secp256k1": "^0.4",
     "league/html-to-markdown": "^5.1"

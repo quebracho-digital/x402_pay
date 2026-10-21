@@ -7,6 +7,7 @@ namespace Drupal\x402_pay\Drush\Commands;
 use Drupal\x402_pay\Buyer;
 use Drupal\x402_pay\Networks;
 use Drupal\x402_pay\Signer;
+use Drupal\x402_pay\SolanaKey;
 use Drupal\x402_pay\Sweeper;
 use GuzzleHttp\ClientInterface;
 use Drush\Attributes as CLI;
@@ -48,6 +49,9 @@ final class X402Commands extends DrushCommands {
 
   /**
    * Buys an x402 call: the buyer's key from BUYER_PRIVATE_KEY.
+   *
+   * An EVM key (0x and 64 hex) pays on EVM, a Solana key (base58 or a JSON
+   * array of bytes) on Solana.
    */
   #[CLI\Command(name: 'x402:buy')]
   #[CLI\Argument(name: 'url', description: 'The paid resource.')]
@@ -58,7 +62,8 @@ final class X402Commands extends DrushCommands {
     $key = getenv('BUYER_PRIVATE_KEY') ?: throw new \RuntimeException('Set BUYER_PRIVATE_KEY.');
     $input = $options['input'] === NULL ? NULL : (json_decode($options['input'], TRUE) ?? throw new \InvalidArgumentException('--input is not JSON.'));
     $max = (int) round((float) $options['max'] * 1e6);
-    $buyer = new Buyer($this->httpClient, new Signer(trim($key)));
+    $wallet = str_starts_with(trim($key), '0x') ? new Signer(trim($key)) : new SolanaKey($key);
+    $buyer = new Buyer($this->httpClient, $wallet);
     $paid = $buyer->pay($url, $input, function (array $req) use ($max) {
       $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));
       if ((int) $req['amount'] > $max) {

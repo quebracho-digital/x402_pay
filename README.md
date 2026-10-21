@@ -81,11 +81,16 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 - **The buyer** (`Drupal\x402_pay\Buyer`): the other side, for a site or
   a script that buys from agents. It reads the 402, lets a callback refuse
   the price (a budget), signs one EIP-3009 transfer and asks again, paid.
-  From the command line: `BUYER_PRIVATE_KEY=0x… drush x402:buy <url>
-  [--input='{"q": 1}'] [--max=0.05]`.
+  With a Solana key (`SolanaKey`) it pays the 402's Solana offer instead:
+  one USDC transfer to the seller's token account, the fees left to the
+  facilitator's fee payer (`Solana`, the layout the `exact` scheme's
+  facilitators check). From the command line: `BUYER_PRIVATE_KEY=0x… drush
+  x402:buy <url> [--input='{"q": 1}'] [--max=0.05]`; a Solana key (base58,
+  or solana-keygen's JSON array) in the same variable pays on Solana.
 
 **No Node.js, no npm.** Everything is signed in PHP (`Signer`, `Eip712`, on
-`kornrunner/keccak` and `kornrunner/secp256k1`), and the tests check it
+`kornrunner/keccak` and `kornrunner/secp256k1`; Solana's ed25519 with
+sodium), and the tests check it
 against vectors that viem produced once (`tests/fixtures/`), byte for byte.
 The Node scripts this module started with (a viem buyer and the vector
 generator) are gone, by rule: no dependency tree we did not read gets near

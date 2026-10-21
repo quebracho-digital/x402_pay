@@ -7,16 +7,18 @@ namespace Drupal\x402_pay;
 use GuzzleHttp\ClientInterface;
 
 /**
- * Buys an x402 call: asks, signs one EIP-3009 transfer, asks again paid.
+ * Buys an x402 call: asks, signs one transfer, asks again paid.
  *
  * The other side of PaymentGate, for a Drupal site or a script that buys
- * from agents: no gas, no allowance, one signature by the buyer's key.
+ * from agents: no gas, no allowance, one signature by the buyer's key. On
+ * EVM an EIP-3009 authorization; on Solana a USDC transfer whose fees the
+ * facilitator pays.
  */
 class Buyer {
 
   public function __construct(
     private readonly ClientInterface $httpClient,
-    private readonly Signer $wallet,
+    private readonly Signer|SolanaKey $wallet,
   ) {}
 
   /**
@@ -59,12 +61,37 @@ class Buyer {
       throw new \RuntimeException(sprintf('Expected 402, got %d: %s', $first->getStatusCode(), substr((string) $first->getBody(), 0, 300)));
     }
     $required = PaymentHeaders::decode($header);
-    $req = $required['accepts'][0];
+    // The first offer on the wallet's chains.
+    $solana = $this->wallet instanceof SolanaKey;
+    $req = current(array_filter($required['accepts'] ?? [], fn($a) => str_starts_with((string) $a['network'], 'solana:') === $solana))
+      ?: throw new \RuntimeException(sprintf('Nothing to pay on %s: %s', $solana ? 'Solana' : 'EVM', implode(', ', array_column($required['accepts'] ?? [], 'network'))));
     if ($approve) {
       $approve($req);
     }
 
     // 2. One transfer of exactly that, signed by the buyer.
+    $payment = $solana ? $this->solana($required, $req) : $this->evm($required, $req);
+
+    // 3. The same call, paid. It waits as long as the payment can settle: a
+    // buyer that hangs up first may be charged for an answer it never reads.
+    $paid = $call([PaymentHeaders::SIGNATURE => PaymentHeaders::encode($payment)], (int) $req['maxTimeoutSeconds'] + 30);
+    $receipt = $paid->getHeaderLine(PaymentHeaders::RESPONSE);
+    $receipt = $receipt === '' ? [] : PaymentHeaders::decode($receipt);
+    return [
+      'status' => $paid->getStatusCode(),
+      'body' => (string) $paid->getBody(),
+      'contentType' => $paid->getHeaderLine('Content-Type'),
+      'tx' => !empty($receipt['success']) ? $receipt['transaction'] : NULL,
+      'amount' => (string) $req['amount'],
+      'network' => $req['network'],
+      'requirements' => $req,
+    ];
+  }
+
+  /**
+   * An EIP-3009 authorization of exactly the price, signed.
+   */
+  private function evm(array $required, array $req): array {
     $authorization = [
       'from' => $this->wallet->address(),
       'to' => $req['payTo'],
@@ -84,26 +111,36 @@ class Buyer {
       'TransferWithAuthorization',
       $authorization,
     );
-    $payment = [
+    return [
       'x402Version' => 2,
       'resource' => $required['resource'],
       'accepted' => ['extra' => ['assetTransferMethod' => 'eip3009'] + $req['extra']] + $req,
       'payload' => ['signature' => $this->wallet->sign($digest), 'authorization' => $authorization],
     ];
+  }
 
-    // 3. The same call, paid. It waits as long as the payment can settle: a
-    // buyer that hangs up first may be charged for an answer it never reads.
-    $paid = $call([PaymentHeaders::SIGNATURE => PaymentHeaders::encode($payment)], (int) $req['maxTimeoutSeconds'] + 30);
-    $receipt = $paid->getHeaderLine(PaymentHeaders::RESPONSE);
-    $receipt = $receipt === '' ? [] : PaymentHeaders::decode($receipt);
+  /**
+   * A Solana transaction that pays exactly the price, signed by the buyer.
+   *
+   * @throws \RuntimeException
+   *   A token this module does not know, or no node to ask a blockhash.
+   */
+  private function solana(array $required, array $req): array {
+    $network = Networks::ALL[$req['network']] ?? NULL;
+    // ponytail: the tokens in Networks only; another mint's decimals come
+    // from getTokenSupply if a seller ever asks for one.
+    if (($network['asset'] ?? NULL) !== $req['asset']) {
+      throw new \RuntimeException("Unknown token {$req['asset']} on {$req['network']}.");
+    }
+    $blockhash = $req['extra']['recentBlockhash']
+      ?? (new Rpc($this->httpClient, $network['rpc']))('getLatestBlockhash', [['commitment' => 'confirmed']])['value']['blockhash'];
+    $memo = $req['extra']['memo'] ?? bin2hex(random_bytes(16));
+    $message = Solana::message($req, $this->wallet->address(), $blockhash, $network['decimals'], $memo);
     return [
-      'status' => $paid->getStatusCode(),
-      'body' => (string) $paid->getBody(),
-      'contentType' => $paid->getHeaderLine('Content-Type'),
-      'tx' => !empty($receipt['success']) ? $receipt['transaction'] : NULL,
-      'amount' => (string) $req['amount'],
-      'network' => $req['network'],
-      'requirements' => $req,
+      'x402Version' => 2,
+      'resource' => $required['resource'],
+      'accepted' => $req,
+      'payload' => ['transaction' => Solana::transaction($message, $this->wallet)],
     ];
   }
 
