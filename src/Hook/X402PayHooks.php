@@ -6,10 +6,13 @@ namespace Drupal\x402_pay\Hook;
 
 use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Access\AccessResultInterface;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\field\FieldConfigInterface;
+use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Sweeper;
 
@@ -18,7 +21,39 @@ use Drupal\x402_pay\Sweeper;
  */
 class X402PayHooks {
 
-  public function __construct(private readonly Sweeper $sweeper) {}
+  public function __construct(
+    private readonly Sweeper $sweeper,
+    private readonly RouteMatchInterface $routeMatch,
+  ) {}
+
+  /**
+   * Implements hook_theme().
+   */
+  #[Hook('theme')]
+  public function theme(): array {
+    return [
+      'x402_pay_markdown_link' => [
+        'variables' => ['url' => NULL, 'attributes' => []],
+      ],
+    ];
+  }
+
+  /**
+   * A free entity's page names its markdown in <head> and in a Link header.
+   *
+   * What an agent reading the HTML sees, and one reading only the headers.
+   */
+  #[Hook('page_attachments')]
+  public function pageAttachments(array &$attachments): void {
+    $cacheability = new CacheableMetadata();
+    if ($url = Delivery::markdownUrl($this->routeMatch, $cacheability)) {
+      $attachments['#attached']['html_head_link'][] = [
+        ['rel' => 'alternate', 'type' => 'text/markdown', 'href' => $url],
+        TRUE,
+      ];
+    }
+    CacheableMetadata::createFromRenderArray($attachments)->merge($cacheability)->applyTo($attachments);
+  }
 
   /**
    * Sweeps the seller wallets to the cold wallet, when on and due.

@@ -28,6 +28,11 @@ services:
     arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch']
     tags:
       - { name: event_subscriber }
+  x402_pay.markdown_path_processor:
+    class: Drupal\x402_pay\PathProcessor\MarkdownPathProcessor
+    tags:
+      # After the language prefix is taken off (300), before aliases (100).
+      - { name: path_processor_inbound, priority: 200 }
   x402_pay.page_cache_request_policy:
     class: Drupal\x402_pay\PageCache\AgentRequestPolicy
     tags:

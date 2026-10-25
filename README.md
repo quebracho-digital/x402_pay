@@ -46,9 +46,20 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
     pages are left alone.
 - **Markdown for free pages too:** `Accept: text/markdown` on the own URL
   of an entity that sells nothing there (and whose `full` view mode no field
-  sells) returns that view mode as markdown, announced with a `Link`
-  header. No other module needed. Every entity page says `Vary: Accept`,
-  and the page cache never answers a request for markdown or one that pays.
+  sells) returns that view mode as markdown. No other module needed. Every
+  entity page says `Vary: Accept`, and the page cache never answers a
+  request for markdown or one that pays.
+- **Any page plus `.md`**, for agents that cannot set `Accept` or read
+  headers: `/terms.md`, `/es/terms.md`, `/node/1.md`. The same gate: a free
+  page as markdown, a sold one charged (402), anything else 404, never the
+  HTML under a `.md` name. A free page names it in `<head>`
+  (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
+- **A link people and agents see:** the *Markdown for agents* block, its
+  markup in `x402-pay-markdown-link.html.twig` (variables `url`,
+  `attributes`) for a theme to override, or render
+  `['#theme' => 'x402_pay_markdown_link', '#url' => …]` where you want it
+  (Ombú puts it in its language switcher), with the URL from
+  `Delivery::markdownUrl($route_match, $cacheability)`.
 - **`/x402/discovery`**: everything the site sells, one item per product,
   in the shape of Circle's Discovery API, so a client written for Circle's
   Agent Marketplace reads it unchanged. Every entity type with the field;

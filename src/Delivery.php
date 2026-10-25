@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\Entity\EntityViewDisplay;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Render\RendererInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\x402_pay\Event\DeliveryEvent;
@@ -118,6 +120,29 @@ class Delivery {
   private function deliver(Request $request, FieldableEntityInterface $entity, X402PriceItem $item): Response {
     $event = $this->eventDispatcher->dispatch(new DeliveryEvent($entity, $item, $item->viewMode(), $request));
     return $event->getResponse() ?? $this->markdown($entity, $item->viewMode());
+  }
+
+  /**
+   * Where agents read the page a route shows as markdown, if it is free.
+   *
+   * The entity's own URL plus ".md" (MarkdownPathProcessor), in the page's
+   * language. A page that sells is announced by its x402 links instead.
+   * What it depends on goes to $cacheability: the route, and the entity,
+   * which may start selling.
+   */
+  public static function markdownUrl(RouteMatchInterface $routeMatch, ?CacheableMetadata $cacheability = NULL): ?string {
+    $cacheability?->addCacheContexts(['route']);
+    $entity = preg_match('/^entity\.(\w+)\.canonical$/', (string) $routeMatch->getRouteName(), $m) ? $routeMatch->getParameter($m[1]) : NULL;
+    if (!$entity instanceof FieldableEntityInterface) {
+      return NULL;
+    }
+    $cacheability?->addCacheableDependency($entity);
+    if (X402PriceItem::all($entity)) {
+      return NULL;
+    }
+    $url = $entity->toUrl()->toString(TRUE);
+    $cacheability?->addCacheableDependency($url);
+    return $url->getGeneratedUrl() . '.md';
   }
 
   /**

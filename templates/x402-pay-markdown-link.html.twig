@@ -1,0 +1,14 @@
+{#
+/**
+ * @file
+ * The link to this page as markdown, for agents: its own URL plus ".md".
+ *
+ * Override it in a theme to word or place it otherwise; Ombú, for one,
+ * shows it as one more language in its language switcher.
+ *
+ * Available variables:
+ * - url: the page's markdown URL.
+ * - attributes: the link's HTML attributes.
+ */
+#}
+<a{{ attributes.setAttribute('href', url).setAttribute('rel', 'alternate').setAttribute('type', 'text/markdown') }}>{{ 'Markdown, for agents'|t }}</a>

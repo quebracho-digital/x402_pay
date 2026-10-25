@@ -31,6 +31,7 @@ final class PageCacheTest extends BrowserTestBase {
   protected static $modules = [
     'x402_pay',
     'key',
+    'block',
     'entity_test',
     'page_cache',
     'dynamic_page_cache',
@@ -112,7 +113,31 @@ final class PageCacheTest extends BrowserTestBase {
     $this->assertSession()->responseHeaderContains('Content-Type', 'text/html');
     $this->assertSession()->responseHeaderContains('Link', 'type="text/markdown"');
 
-    // Sold: by Accept, by ?_format=, and through JSON:API, never free.
+    // Named in <head> and in a Link header, at its own URL plus .md.
+    $md = $free->toUrl()->toString() . '.md';
+    $this->assertSession()->elementExists('css', 'link[rel="alternate"][type="text/markdown"][href="' . $md . '"]');
+    $this->assertSession()->responseHeaderContains('Link', $md);
+    // Which answers agents that send no Accept, twice: no cache keeps it.
+    for ($i = 0; $i < 2; $i++) {
+      $this->drupalGet($md, [], ['Accept' => 'text/html']);
+      $this->assertSession()->statusCodeEquals(200);
+      $this->assertSession()->responseHeaderContains('Content-Type', 'text/markdown');
+      $this->assertStringStartsWith('# Free notes', $this->getSession()->getPage()->getContent());
+    }
+    // The link people see: a block, through a template themes override.
+    $this->drupalPlaceBlock('x402_pay_markdown_link');
+    $this->drupalGet($free->toUrl());
+    $this->assertSession()->linkByHrefExists($md);
+    $this->drupalGet($sold->toUrl(), [], ['Accept' => 'text/html']);
+    $this->assertSession()->linkByHrefNotExists($sold->toUrl()->toString() . '.md');
+    $this->assertSession()->elementNotExists('css', 'link[type="text/markdown"]');
+    // A .md path is never an HTML page.
+    $this->drupalGet('user/login.md', [], ['Accept' => 'text/html']);
+    $this->assertSession()->statusCodeEquals(404);
+
+    // Sold: by Accept, by .md, by ?_format=, and through JSON:API, never free.
+    $this->drupalGet($sold->toUrl()->toString() . '.md', [], ['Accept' => 'text/html']);
+    $this->assertSession()->statusCodeEquals(402);
     $this->drupalGet($sold->toUrl(), [], ['Accept' => 'text/markdown']);
     $this->assertSession()->statusCodeEquals(402);
     $this->drupalGet($sold->toUrl('canonical', ['query' => ['_format' => 'markdown']]), [], ['Accept' => '*/*']);

@@ -9,12 +9,14 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Url;
 use Drupal\x402_pay\Delivery;
+use Drupal\x402_pay\PathProcessor\MarkdownPathProcessor;
 use Drupal\x402_pay\PaymentHeaders;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
@@ -57,12 +59,24 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
   public function onRequest(RequestEvent $event): void {
     $request = $event->getRequest();
     $entity = $event->isMainRequest() && $request->isMethodCacheable() ? $this->entity($request) : NULL;
-    if (!$entity) {
-      return;
+    if ($entity) {
+      $this->answerAgent($event, $entity);
     }
-    $canonical = $this->isCanonical($request);
+    // A .md path is markdown or a sale, never the HTML page under its name.
+    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse()) {
+      throw new NotFoundHttpException();
+    }
+  }
+
+  /**
+   * Charges an agent for what the route shows, or converts a free page.
+   */
+  private function answerAgent(RequestEvent $event, FieldableEntityInterface $entity): void {
+    $request = $event->getRequest();
+    $md = MarkdownPathProcessor::asked($request);
+    $canonical = $this->isCanonical($request) && !$md;
     // On its own URL: only what a field sells there (its "canonical"
-    // setting). Elsewhere (JSON:API, REST, a .md path) the route can show
+    // setting). Elsewhere (a .md path, JSON:API, REST) the route can show
     // any field, so anything sold is charged.
     $item = $canonical
       ? X402PriceItem::find($entity)
@@ -72,7 +86,7 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     }
     // Free: nothing sold on this URL, and the page's view mode not sold
     // elsewhere either.
-    elseif (!$item && $canonical && $this->wantsMarkdown($request) && !X402PriceItem::find($entity, self::PAGE)) {
+    elseif (!$item && ($canonical || $md) && $this->wantsMarkdown($request) && !X402PriceItem::find($entity, self::PAGE)) {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
@@ -93,13 +107,10 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     }
     $headers = $event->getResponse()->headers;
     // One URL, HTML or markdown by Accept: shared caches (a CDN) must know.
+    // A free page's markdown is announced by X402PayHooks::pageAttachments().
     $headers->set('Vary', 'Accept', FALSE);
     $items = X402PriceItem::all($entity);
     if (!$items) {
-      if (!str_starts_with((string) $headers->get('Content-Type'), 'text/markdown')) {
-        $self = $entity->toUrl()->toString(TRUE)->getGeneratedUrl();
-        $headers->set('Link', "<$self>; rel=\"alternate\"; type=\"text/markdown\"", FALSE);
-      }
       return;
     }
     $this->pageCacheKillSwitch->trigger();
@@ -147,17 +158,17 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Asked for markdown by name: not a browser, not "anything".
+   * Asked for markdown by name (Accept, or .md): not a browser, not "anything".
    */
   private function wantsMarkdown(Request $request): bool {
-    return str_contains((string) $request->headers->get('Accept'), 'text/markdown');
+    return str_contains((string) $request->headers->get('Accept'), 'text/markdown') || MarkdownPathProcessor::asked($request);
   }
 
   /**
    * An agent pays, does not ask for HTML, or names itself in User-Agent.
    */
   public function isAgent(Request $request): bool {
-    if ($request->headers->has(PaymentHeaders::SIGNATURE) || !str_contains((string) $request->headers->get('Accept'), 'text/html')) {
+    if ($request->headers->has(PaymentHeaders::SIGNATURE) || MarkdownPathProcessor::asked($request) || !str_contains((string) $request->headers->get('Accept'), 'text/html')) {
       return TRUE;
     }
     $pattern = (string) $this->configFactory->get('x402_pay.settings')->get('agent_user_agents');
