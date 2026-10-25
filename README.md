@@ -60,6 +60,16 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   module answers its own pages' `.md` from a request subscriber between
   routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`. A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
+- **Why not Markdownify:** it is the popular module for markdown pages
+  (`.md`, `?_format=markdown`, `Accept: text/markdown`) and converts with the
+  same library we do (`league/html-to-markdown`), so depending on it would add
+  nothing to the conversion. It has no notion of a price: its routes
+  (`/markdownify/node/N`, `?_format=markdown`) are not the ones the gate
+  watches, which decides by *entity* on its canonical route. By reading both
+  codes (not yet run: the test is pending), a priced entity asked through those
+  routes would be rendered free. So `x402_pay` keeps its own markdown and does
+  **not** require Markdownify; **do not enable both on a site that sells
+  markdown** until the test that proves they coexist exists.
 - **A link people and agents see:** the *Markdown for agents* block, its
   markup in `x402-pay-markdown-link.html.twig` (variables `url`,
   `attributes`) for a theme to override, or render
