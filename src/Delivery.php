@@ -7,6 +7,7 @@ namespace Drupal\x402_pay;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\Entity\EntityViewDisplay;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
@@ -146,7 +147,10 @@ class Delivery {
     if (X402PriceItem::find($entity) || X402PriceItem::find($entity, 'full')) {
       return NULL;
     }
-    $url = $entity->toUrl()->toString(TRUE);
+    // In the page's language: an entity not translated to it would link to
+    // its own.
+    $cacheability?->addCacheContexts(['languages:' . LanguageInterface::TYPE_URL]);
+    $url = $entity->toUrl('canonical', ['language' => \Drupal::languageManager()->getCurrentLanguage(LanguageInterface::TYPE_URL)])->toString(TRUE);
     $cacheability?->addCacheableDependency($url);
     return $url->getGeneratedUrl() . '.md';
   }
