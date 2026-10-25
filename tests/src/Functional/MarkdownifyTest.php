@@ -10,6 +10,7 @@ use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\key\Entity\Key;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\BrowserTestBase;
+use Drupal\Tests\field\Traits\EntityReferenceFieldCreationTrait;
 use Drupal\user\Entity\Role;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -23,6 +24,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[Group('x402_pay')]
 #[RunTestsInSeparateProcesses]
 final class MarkdownifyTest extends BrowserTestBase {
+
+  use EntityReferenceFieldCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -150,6 +153,85 @@ final class MarkdownifyTest extends BrowserTestBase {
       $this->assertContains($this->getSession()->getStatusCode(), [403, 404], $url);
       $this->assertStringNotContainsString('Draft', $this->getSession()->getPage()->getContent(), $url);
     }
+  }
+
+  /**
+   * JSON:API's lists, includes and relationships omit what is sold.
+   */
+  public function testJsonApiOmitsWhatIsSoldBesideItsResource(): void {
+    $this->createEntityReferenceField('node', 'page', 'field_ref', 'Ref', 'node');
+    $this->container->get('router.builder')->rebuild();
+    $sold = Node::create([
+      'type' => 'page',
+      'title' => 'Terms of X',
+      'body' => 'Sold body',
+      'field_price' => ['enabled' => 1],
+    ]);
+    $sold->save();
+    $free = Node::create([
+      'type' => 'page',
+      'title' => 'Free notes',
+      'body' => 'Free body',
+      'field_price' => ['enabled' => 0],
+      'field_ref' => $sold,
+    ]);
+    $free->save();
+    $api = ['Accept' => 'application/vnd.api+json'];
+    $free_url = 'jsonapi/node/page/' . $free->uuid();
+    foreach ([
+      'jsonapi/node/page' => [],
+      $free_url => ['include' => 'field_ref'],
+      "$free_url/field_ref" => [],
+    ] as $url => $query) {
+      $this->drupalGet($url, ['query' => $query], $api);
+      $this->assertSame(200, $this->getSession()->getStatusCode(), $url);
+      $this->assertStringNotContainsString('Sold body', $this->getSession()->getPage()->getContent(), $url);
+    }
+    $this->drupalGet('jsonapi/node/page', [], $api);
+    $this->assertStringContainsString('Free body', $this->getSession()->getPage()->getContent());
+    // Nor told by filters or sorts, match by match.
+    foreach ([
+      ['filter' => ['body.value' => ['operator' => 'CONTAINS', 'value' => 'Sold']]],
+      ['filter' => ['field_ref.body.value' => ['operator' => 'CONTAINS', 'value' => 'Sold']]],
+      ['sort' => 'body.value'],
+    ] as $query) {
+      $this->drupalGet('jsonapi/node/page', ['query' => $query], $api);
+      $this->assertNotEquals(200, $this->getSession()->getStatusCode(), http_build_query($query));
+    }
+    // Its own resource is still for sale.
+    $this->drupalGet('jsonapi/node/page/' . $sold->uuid(), [], $api);
+    $this->assertSession()->statusCodeEquals(402);
+    // Nor in what a write answers.
+    $this->config('jsonapi.settings')->set('read_only', FALSE)->save(TRUE);
+    $this->drupalLogin($this->drupalCreateUser(['access content', 'edit any page content']));
+    $client = $this->getHttpClient();
+    $token = (string) $client->get($this->buildUrl('session/token'), ['cookies' => $this->getSessionCookies()])->getBody();
+    $patch = $client->request('PATCH', $this->buildUrl($free_url, ['query' => ['include' => 'field_ref']]), [
+      'cookies' => $this->getSessionCookies(),
+      'headers' => [
+        'Content-Type' => 'application/vnd.api+json',
+        'Accept' => 'application/vnd.api+json',
+        'X-CSRF-Token' => $token,
+      ],
+      'body' => json_encode([
+        'data' => ['type' => 'node--page', 'id' => $free->uuid(), 'attributes' => ['title' => 'Free notes 2']],
+      ]),
+      'http_errors' => FALSE,
+    ]);
+    $this->assertSame(200, $patch->getStatusCode(), (string) $patch->getBody());
+    $this->assertStringNotContainsString('Sold body', (string) $patch->getBody());
+    // Who reads it free reads it free here too.
+    $this->drupalLogin($this->drupalCreateUser(['access content', 'access x402 content free']));
+    $this->drupalGet('jsonapi/node/page', ['query' => ['filter' => ['body.value' => 'Sold body']]], $api);
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertStringContainsString('Sold body', $this->getSession()->getPage()->getContent());
+    $this->drupalLogout();
+    // A draft's, which JSON:API's route does not check, is not offered.
+    $draft = Node::create(['type' => 'page', 'title' => 'Draft', 'status' => 0, 'field_price' => ['enabled' => 1]]);
+    $draft->save();
+    $this->drupalGet('jsonapi/node/page/' . $draft->uuid(), [], $api);
+    $this->assertSession()->statusCodeEquals(403);
+    $this->assertStringNotContainsString('Draft', implode(' ', $this->getSession()->getResponseHeaders()['payment-required'] ?? []) . $this->getSession()->getPage()->getContent());
   }
 
   /**

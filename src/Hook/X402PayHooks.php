@@ -7,6 +7,8 @@ namespace Drupal\x402_pay\Hook;
 use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Routing\RouteMatchInterface;
@@ -24,6 +26,7 @@ class X402PayHooks {
   public function __construct(
     private readonly Sweeper $sweeper,
     private readonly RouteMatchInterface $routeMatch,
+    private readonly EntityFieldManagerInterface $entityFieldManager,
   ) {}
 
   /**
@@ -84,6 +87,57 @@ class X402PayHooks {
       return AccessResult::neutral();
     }
     return AccessResult::forbiddenIf(!$account->hasPermission('set x402 prices'))->cachePerPermissions();
+  }
+
+  /**
+   * What JSON:API reads beside its route's entity, when sold, it omits.
+   *
+   * A collection, an include (also in a POST's or PATCH's answer), a
+   * relationship: never free. The route's own entity is the gate's
+   * (AgentRequestSubscriber), which answers a GET before JSON:API does:
+   * charged, or denied without view access. Those who read it free anyway
+   * read it here too.
+   */
+  #[Hook('entity_access')]
+  public function entityAccess(EntityInterface $entity, string $operation, AccountInterface $account): AccessResultInterface {
+    $own = $this->routeMatch->getParameter('entity');
+    // ponytail: JSON:API only, not Views' REST export (README). No route
+    // context on neutral: JSON:API and pages never share a cache entry.
+    if ($operation !== 'view' || !$this->routeMatch->getRouteObject()?->getDefault('_is_jsonapi')
+      || $account->hasPermission('access x402 content free')
+      || ($own instanceof EntityInterface && $own->getEntityTypeId() === $entity->getEntityTypeId() && $own->id() === $entity->id())
+      || !X402PriceItem::all($entity)) {
+      return AccessResult::neutral()->cachePerPermissions();
+    }
+    return AccessResult::forbidden('Sold: buy it at its x402 URL, listed at /x402/discovery.')
+      ->addCacheableDependency($entity)
+      ->addCacheContexts(['route'])
+      ->cachePerPermissions();
+  }
+
+  /**
+   * JSON:API filters and sorts by no field of a bundle that sells.
+   *
+   * Filtering by what an omitted entity holds would still tell it, match by
+   * match.
+   */
+  #[Hook('jsonapi_entity_field_filter_access')]
+  public function jsonapiEntityFieldFilterAccess(FieldDefinitionInterface $field_definition, AccountInterface $account): AccessResultInterface {
+    // ponytail: base fields (title, author, dates) stay filterable, as
+    // lists show them; an entity type selling a base field's text needs it
+    // here too.
+    $bundle = $field_definition->getTargetBundle();
+    if ($field_definition->getFieldStorageDefinition()->isBaseField() || !$bundle || $account->hasPermission('access x402 content free')) {
+      return AccessResult::neutral()->cachePerPermissions();
+    }
+    foreach ($this->entityFieldManager->getFieldDefinitions($field_definition->getTargetEntityTypeId(), $bundle) as $definition) {
+      if ($definition->getType() === 'x402_price') {
+        return AccessResult::forbidden('A bundle that sells is not filtered by its fields.')
+          ->addCacheTags(['entity_field_info'])
+          ->cachePerPermissions();
+      }
+    }
+    return AccessResult::neutral()->addCacheTags(['entity_field_info'])->cachePerPermissions();
   }
 
   /**

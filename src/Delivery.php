@@ -48,6 +48,11 @@ class Delivery {
    *   Sold on the entity's own URL: that is the resource bought.
    */
   public function charge(Request $request, FieldableEntityInterface $entity, X402PriceItem $item, bool $canonical): Response {
+    // Paying grants nothing beyond view access, whatever the route checked
+    // (JSON:API's resource checks none).
+    if (!$entity->access('view')) {
+      return new JsonResponse(['error' => 'Not for sale to you'], 403);
+    }
     $event = $this->quote($request, $entity, $item);
     if ($event->isDenied()) {
       return new JsonResponse(['error' => 'Not for sale to you'], 403);

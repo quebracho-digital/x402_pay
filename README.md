@@ -41,7 +41,8 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   - **One gate, by entity:** any route that shows an entity it sells (its
     page, a `.md` path, `?_format=`, JSON:API, REST) answers agents with the
     sale, so another module cannot hand out for free what is sold. It runs
-    after routing's access check: what a visitor cannot see is never
+    after routing's access check, and checks view access itself (JSON:API's
+    resource route checks none): what a visitor cannot see is never
     offered, and paying grants nothing beyond view access. Forms and admin
     pages are left alone.
 - **Markdown for free pages too:** `Accept: text/markdown` on the own URL
@@ -73,9 +74,15 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 - **What is sold is not cached, for now:** any page showing a priced entity
   is kept out of the page cache and sent `Cache-Control: private`; free pages
   cache as usual. A cache that varies by payment is on the roadmap.
-- **Not gated yet: JSON:API collections** (`/jsonapi/node/page`) and
-  `include`, which list entities with no entity in the route. Do not expose a
-  sold field through JSON:API until they are.
+- **JSON:API lists, includes and relationships** omit what is sold (in
+  `meta.omitted`, label only), and refuse to filter or sort by a field of a
+  bundle that sells: a match would tell, bit by bit, what an omitted entity
+  holds. Base fields (title, author, dates) stay filterable. A sold entity's
+  own resource is charged, as above; those with *access x402 content free*
+  read and filter it all. Not covered: a Views REST export lists sold
+  entities free, so do not build one of them; a file's bytes are served by
+  its URL, sold or not; and an old revision is judged by its own price, so
+  whoever may view revisions reads one made before the price was set.
 - **A link people and agents see:** the *Markdown for agents* block, its
   markup in `x402-pay-markdown-link.html.twig` (variables `url`,
   `attributes`) for a theme to override, or render
