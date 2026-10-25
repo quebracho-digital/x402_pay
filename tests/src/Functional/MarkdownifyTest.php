@@ -152,11 +152,10 @@ final class MarkdownifyTest extends BrowserTestBase {
     }
   }
 
-
   /**
    * Another page showing what is sold is not cached for an agent either.
    */
-  public function testARevisionPageIsNeverCachedForAgents(): void {
+  public function testRevisionPagesAreNeverCachedForAgents(): void {
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view all revisions')->save();
     $sold = Node::create(['type' => 'page', 'title' => 'Terms of X', 'field_price' => ['enabled' => 1]]);
     $sold->save();
