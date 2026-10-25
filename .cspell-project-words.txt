@@ -12,6 +12,7 @@ keccak
 keypair
 kornrunner
 licence
+markdownify
 mdanter
 microlamport
 ombú
@@ -28,4 +29,5 @@ términos
 viem
 viem's
 xbuyer
+xhtml
 ñandú

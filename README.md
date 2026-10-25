@@ -60,16 +60,22 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   module answers its own pages' `.md` from a request subscriber between
   routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`. A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
-- **Why not Markdownify:** it is the popular module for markdown pages
-  (`.md`, `?_format=markdown`, `Accept: text/markdown`) and converts with the
-  same library we do (`league/html-to-markdown`), so depending on it would add
-  nothing to the conversion. It has no notion of a price: its routes
-  (`/markdownify/node/N`, `?_format=markdown`) are not the ones the gate
-  watches, which decides by *entity* on its canonical route. By reading both
-  codes (not yet run: the test is pending), a priced entity asked through those
-  routes would be rendered free. So `x402_pay` keeps its own markdown and does
-  **not** require Markdownify; **do not enable both on a site that sells
-  markdown** until the test that proves they coexist exists.
+- **With Markdownify:** not needed (it converts with the same library,
+  `league/html-to-markdown`), and both can be enabled. `MarkdownifyTest` asks
+  a priced node through each of its ways (`.md`, `/markdownify/node/N`,
+  `?_format=markdown`, `Accept: text/markdown` next to a browser's Accept)
+  and gets 402; a free node reads as markdown and a draft is denied. It holds
+  because, on any route that shows one entity (Markdownify's, a JSON:API
+  resource, REST, a revision), the gate charges whatever is answered in a
+  format other than an HTML page, whatever Accept says, and keeps any page
+  showing what is sold out of the page cache. Markdownify 1.2.0 answers
+  `?_format=markdown` with 404, with or without `x402_pay`.
+- **What is sold is not cached, for now:** any page showing a priced entity
+  is kept out of the page cache and sent `Cache-Control: private`; free pages
+  cache as usual. A cache that varies by payment is on the roadmap.
+- **Not gated yet: JSON:API collections** (`/jsonapi/node/page`) and
+  `include`, which list entities with no entity in the route. Do not expose a
+  sold field through JSON:API until they are.
 - **A link people and agents see:** the *Markdown for agents* block, its
   markup in `x402-pay-markdown-link.html.twig` (variables `url`,
   `attributes`) for a theme to override, or render

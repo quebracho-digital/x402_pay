@@ -142,6 +142,10 @@ final class PageCacheTest extends BrowserTestBase {
     $this->assertSession()->statusCodeEquals(402);
     $this->drupalGet($sold->toUrl('canonical', ['query' => ['_format' => 'markdown']]), [], ['Accept' => '*/*']);
     $this->assertNotEquals(200, $this->getSession()->getStatusCode());
+    // A browser's Accept makes no JSON free, nor leaves it in the page
+    // cache for the agent that asks next.
+    $this->drupalGet('jsonapi/entity_test/entity_test/' . $sold->uuid(), [], ['Accept' => 'text/html,*/*;q=0.8']);
+    $this->assertSession()->statusCodeEquals(402);
     $this->drupalGet('jsonapi/entity_test/entity_test/' . $sold->uuid(), [], ['Accept' => 'application/vnd.api+json']);
     $this->assertSession()->statusCodeEquals(402);
     $this->drupalGet('jsonapi/entity_test/entity_test/' . $free->uuid(), [], ['Accept' => 'application/vnd.api+json']);

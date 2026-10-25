@@ -65,8 +65,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     if ($entity) {
       $this->answerAgent($event, $entity);
     }
-    // A .md path is markdown or a sale, never the HTML page under its name.
-    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse()) {
+    // A .md path is markdown or a sale, never the HTML page under its name;
+    // a route that answers markdown itself (Markdownify's) answers it.
+    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse() && $request->getRequestFormat() !== 'markdown') {
       throw new NotFoundHttpException();
     }
   }
@@ -107,19 +108,23 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   public function onResponse(ResponseEvent $event): void {
     $request = $event->getRequest();
-    $entity = $event->isMainRequest() && $this->isCanonical($request) ? $this->entity($request) : NULL;
+    $entity = $event->isMainRequest() ? $this->entity($request) : NULL;
     if (!$entity || !$event->getResponse()->isSuccessful()) {
+      return;
+    }
+    $items = X402PriceItem::all($entity);
+    // Any route that shows what is sold (its page, a revision, a contrib
+    // route), as people see it: never cached for an agent.
+    if ($items) {
+      $this->pageCacheKillSwitch->trigger();
+    }
+    if (!$this->isCanonical($request)) {
       return;
     }
     $headers = $event->getResponse()->headers;
     // One URL, HTML or markdown by Accept: shared caches (a CDN) must know.
     // A free page's markdown is announced by X402PayHooks::pageAttachments().
     $headers->set('Vary', 'Accept', FALSE);
-    $items = X402PriceItem::all($entity);
-    if (!$items) {
-      return;
-    }
-    $this->pageCacheKillSwitch->trigger();
     foreach ($items as $item) {
       $mode = $item->viewMode();
       $paid = Url::fromRoute('x402_pay.entity', [
@@ -172,9 +177,13 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
 
   /**
    * An agent pays, does not ask for HTML, or names itself in User-Agent.
+   *
+   * Or is answered anything but an HTML page (markdown, JSON, by a route
+   * or ?_format=): only a page is free for people, whatever Accept says.
    */
   public function isAgent(Request $request): bool {
-    if ($request->headers->has(PaymentHeaders::SIGNATURE) || MarkdownPathProcessor::asked($request) || !str_contains((string) $request->headers->get('Accept'), 'text/html')) {
+    if ($request->headers->has(PaymentHeaders::SIGNATURE) || MarkdownPathProcessor::asked($request)
+      || $request->getRequestFormat() !== 'html' || !str_contains((string) $request->headers->get('Accept'), 'text/html')) {
       return TRUE;
     }
     $pattern = (string) $this->configFactory->get('x402_pay.settings')->get('agent_user_agents');
