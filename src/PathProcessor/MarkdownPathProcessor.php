@@ -15,6 +15,10 @@ use Symfony\Component\HttpFoundation\Request;
  * prefix is taken off and before aliases are resolved; the gate
  * (AgentRequestSubscriber) then charges or converts as for that Accept,
  * and answers 404 rather than an HTML page under a .md name.
+ *
+ * ponytail: every path ending in .md is taken as asked for markdown, so a
+ * path alias or route of its own ending in .md is not reachable; check the
+ * alias manager here if a site needs one.
  */
 final class MarkdownPathProcessor implements InboundPathProcessorInterface {
 

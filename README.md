@@ -45,14 +45,20 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
     offered, and paying grants nothing beyond view access. Forms and admin
     pages are left alone.
 - **Markdown for free pages too:** `Accept: text/markdown` on the own URL
-  of an entity that sells nothing there (and whose `full` view mode no field
-  sells) returns that view mode as markdown. No other module needed. Every
+  of an entity that sells nothing there, and whose `full` view mode no field
+  sells, returns that view mode as markdown. When a field sells `full` at
+  its x402 URL, that markdown is the product: asked for markdown, the own
+  URL charges it (402, with the x402 URL as the resource), never free. No
+  other module needed. Every
   entity page says `Vary: Accept`, and the page cache never answers a
   request for markdown or one that pays.
 - **Any page plus `.md`**, for agents that cannot set `Accept` or read
-  headers: `/terms.md`, `/es/terms.md`, `/node/1.md`. The same gate: a free
-  page as markdown, a sold one charged (402), anything else 404, never the
-  HTML under a `.md` name. A free page names it in `<head>`
+  headers: `/terms.md`, `/es/terms.md`, `/node/1.md`. The same gate, as for
+  the own URL asked for markdown: a free page as markdown, a sold one
+  charged (402), anything else 404, never the HTML under a `.md` name.
+  A path alias ending in `.md` is not reachable. Another
+  module answers its own pages' `.md` from a request subscriber between
+  routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`. A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
 - **A link people and agents see:** the *Markdown for agents* block, its
   markup in `x402-pay-markdown-link.html.twig` (variables `url`,

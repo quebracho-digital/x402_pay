@@ -126,9 +126,10 @@ class Delivery {
    * Where agents read the page a route shows as markdown, if it is free.
    *
    * The entity's own URL plus ".md" (MarkdownPathProcessor), in the page's
-   * language. A page that sells is announced by its x402 links instead.
-   * What it depends on goes to $cacheability: the route, and the entity,
-   * which may start selling.
+   * language, when the gate gives it free: nothing charges on that URL and
+   * no field sells the page's view mode. Otherwise its x402 links announce
+   * what is sold. What it depends on goes to $cacheability: the route, the
+   * entity, and its price fields' settings (one may start charging).
    */
   public static function markdownUrl(RouteMatchInterface $routeMatch, ?CacheableMetadata $cacheability = NULL): ?string {
     $cacheability?->addCacheContexts(['route']);
@@ -137,7 +138,12 @@ class Delivery {
       return NULL;
     }
     $cacheability?->addCacheableDependency($entity);
-    if (X402PriceItem::all($entity)) {
+    foreach ($entity->getFieldDefinitions() as $definition) {
+      if ($definition->getType() === 'x402_price') {
+        $cacheability?->addCacheableDependency($definition);
+      }
+    }
+    if (X402PriceItem::find($entity) || X402PriceItem::find($entity, 'full')) {
       return NULL;
     }
     $url = $entity->toUrl()->toString(TRUE);

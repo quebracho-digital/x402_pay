@@ -156,6 +156,32 @@ final class PageCacheTest extends BrowserTestBase {
   }
 
   /**
+   * A page whose markdown is sold at its x402 URL is never free as markdown.
+   *
+   * Its HTML stays free on its own URL; asked for markdown there (Accept or
+   * .md), the gate charges that product, with its x402 URL as the resource.
+   */
+  public function testMarkdownSoldElsewhereIsChargedOnItsPageToo(): void {
+    FieldConfig::loadByName('entity_test', 'entity_test', 'field_price')->setSetting('canonical', FALSE)->save();
+    Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('view test entity')->save();
+    $entity = EntityTest::create(['name' => 'Report', 'field_price' => ['enabled' => 1]]);
+    $entity->save();
+    $paid = '/x402/entity_test/' . $entity->id() . '/full';
+
+    $this->drupalGet($entity->toUrl(), [], ['Accept' => 'text/html']);
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->elementNotExists('css', 'link[type="text/markdown"]');
+    $page = $entity->toUrl()->toString();
+    foreach ([[$page . '.md', 'text/html'], [$page, 'text/markdown']] as [$url, $accept]) {
+      $this->drupalGet($url, [], ['Accept' => $accept]);
+      $this->assertSession()->statusCodeEquals(402);
+      $this->assertStringContainsString($paid, json_decode($this->getSession()->getPage()->getContent(), TRUE)['resource']['url']);
+    }
+    $this->drupalGet(ltrim($paid, '/'), [], ['Accept' => '*/*']);
+    $this->assertSession()->statusCodeEquals(402);
+  }
+
+  /**
    * The settings form refuses what another field sells.
    */
   public function testTheSettingsFormRefusesWhatAnotherFieldSells(): void {

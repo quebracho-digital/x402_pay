@@ -22,11 +22,14 @@ use Symfony\Component\HttpKernel\KernelEvents;
 /**
  * The one gate for what agents read: charged when sold, markdown when free.
  *
- * It decides by entity, not by route or format: any route that carries an
- * entity it sells (its page, a .md path, ?_format=, JSON:API, REST) answers
- * agents with the sale, so no other module can hand out for free what is
- * sold. Browsers still get the page. It runs after routing's access check:
- * what a visitor cannot see is never offered.
+ * It decides by entity, not by route or format. On an entity's own URL it
+ * charges what a field sells there; asked for markdown there (Accept, a .md
+ * path) also the page's markdown when a field sells it at its x402 URL, and
+ * else converts the page for free. On any other route that carries the
+ * entity (JSON:API, REST) it charges anything sold, so no other module can
+ * hand out for free what is sold. Browsers still get the page.
+ * It runs after routing's access check: what a visitor cannot see is never
+ * offered.
  */
 final class AgentRequestSubscriber implements EventSubscriberInterface {
 
@@ -73,20 +76,23 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function answerAgent(RequestEvent $event, FieldableEntityInterface $entity): void {
     $request = $event->getRequest();
-    $md = MarkdownPathProcessor::asked($request);
-    $canonical = $this->isCanonical($request) && !$md;
-    // On its own URL: only what a field sells there (its "canonical"
-    // setting). Elsewhere (a .md path, JSON:API, REST) the route can show
-    // any field, so anything sold is charged.
+    $canonical = $this->isCanonical($request);
+    $markdown = $canonical && $this->wantsMarkdown($request);
+    $here = $canonical ? X402PriceItem::find($entity) : NULL;
+    // On its own URL: what a field sells there (its "canonical" setting);
+    // asked for markdown (Accept, or .md), also the page's view mode sold at
+    // its x402 URL, since that markdown is the product. Elsewhere (JSON:API,
+    // REST) the route can show any field, so anything sold is charged.
     $item = $canonical
-      ? X402PriceItem::find($entity)
+      ? $here ?? ($markdown ? X402PriceItem::find($entity, self::PAGE) : NULL)
       : X402PriceItem::find($entity) ?? X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::all($entity)[0] ?? NULL;
     if ($item && $this->isAgent($request)) {
-      $event->setResponse($this->delivery->charge($request, $entity, $item, $canonical));
+      // The resource bought: the own URL for what is sold there, else the
+      // x402 URL of the product.
+      $event->setResponse($this->delivery->charge($request, $entity, $item, $here !== NULL));
     }
-    // Free: nothing sold on this URL, and the page's view mode not sold
-    // elsewhere either.
-    elseif (!$item && ($canonical || $md) && $this->wantsMarkdown($request) && !X402PriceItem::find($entity, self::PAGE)) {
+    // Free: neither this URL nor the page's markdown is sold.
+    elseif (!$item && $markdown) {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
@@ -126,7 +132,7 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * The entity a route shows, if any: its page, a .md path, an API.
+   * The entity a route shows, if any: its page (or its .md), an API.
    *
    * Not on forms nor admin pages (editors' tools), nor on x402's own route,
    * which sells on its own.

@@ -31,8 +31,9 @@ services:
   x402_pay.markdown_path_processor:
     class: Drupal\x402_pay\PathProcessor\MarkdownPathProcessor
     tags:
-      # After the language prefix is taken off (300), before aliases (100).
-      - { name: path_processor_inbound, priority: 200 }
+      # After the language prefix (300) and private files (200, which turns
+      # /system/files/a.md into a query), before aliases (100).
+      - { name: path_processor_inbound, priority: 150 }
   x402_pay.page_cache_request_policy:
     class: Drupal\x402_pay\PageCache\AgentRequestPolicy
     tags:
