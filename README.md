@@ -75,14 +75,15 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   is kept out of the page cache and sent `Cache-Control: private`; free pages
   cache as usual. A cache that varies by payment is on the roadmap.
 - **JSON:API lists, includes and relationships** omit what is sold (in
-  `meta.omitted`, label only), and refuse to filter or sort by a field of a
-  bundle that sells: a match would tell, bit by bit, what an omitted entity
-  holds. Base fields (title, author, dates) stay filterable. A sold entity's
-  own resource is charged, as above; those with *access x402 content free*
-  read and filter it all. Not covered: a Views REST export lists sold
-  entities free, so do not build one of them; a file's bytes are served by
-  its URL, sold or not; and an old revision is judged by its own price, so
-  whoever may view revisions reads one made before the price was set.
+  `meta.omitted`, by its URL and the reason), and refuse to filter or sort
+  by a field of a bundle that sells: a match would tell, bit by bit, what an
+  omitted entity holds. Base fields (title, author, dates) stay filterable.
+  A sold entity's own resource is charged, as above; those with *access x402
+  content free* read and filter it all. Not covered: a Views REST export
+  lists sold entities free, so do not build one of them; a file's bytes are
+  served by its URL, sold or not; and an old revision is judged by its own
+  price, so whoever may view revisions reads one made before the price was
+  set.
 - **A link people and agents see:** the *Markdown for agents* block, its
   markup in `x402-pay-markdown-link.html.twig` (variables `url`,
   `attributes`) for a theme to override, or render
@@ -142,6 +143,7 @@ exportable config.
 
 Built for [Ombú](https://github.com/quebracho-digital/ombu), the agent mall;
 plan and status in its [ROADMAP](https://github.com/quebracho-digital/ombu/blob/main/ROADMAP.md).
+What was chosen, what was not and why: [DECISIONS.md](DECISIONS.md).
 
 ## Licence
 
