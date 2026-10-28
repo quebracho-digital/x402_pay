@@ -8,11 +8,21 @@
     "drupal/key": "^1.18",
     "ext-gmp": "*",
     "ext-sodium": "*",
-    "kornrunner/keccak": "^1.1",
-    "kornrunner/secp256k1": "^0.4",
-    "league/html-to-markdown": "^5.1"
+    "league/html-to-markdown": "^5.1",
+    "quebracho/x402": "@dev",
+    "symfony/psr-http-message-bridge": "^6.4 || ^7.0",
+    "guzzlehttp/psr7": "^2.6"
   },
   "require-dev": {
     "drupal/markdownify": "^1.2"
-  }
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../quebracho-x402-mcp/packages/x402",
+      "options": {
+        "symlink": true
+      }
+    }
+  ]
 }
