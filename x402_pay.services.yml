@@ -4,22 +4,24 @@ services:
   logger.channel.x402_pay:
     parent: logger.channel_base
     arguments: ['x402_pay']
-  x402_pay.facilitator:
-    class: Drupal\x402_pay\CircleFacilitator
-    arguments:
-      $config: '@config.factory'
-      $keys: '@key.repository'
-  x402_pay.chain_facilitator:
-    class: Drupal\x402_pay\ChainFacilitator
-    arguments: ['@http_client', '@config.factory', '@key.repository', '@lock']
-  x402_pay.remote_facilitator:
-    class: Drupal\x402_pay\RemoteFacilitator
-    arguments: ['@http_client', '@config.factory', '@key.repository', '@cache.default']
+  x402_pay.psr17:
+    class: GuzzleHttp\Psr7\HttpFactory
+  x402_pay.psr_http_factory:
+    class: Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory
+    arguments: ['@x402_pay.psr17', '@x402_pay.psr17', '@x402_pay.psr17', '@x402_pay.psr17']
+  x402_pay.http_foundation_factory:
+    class: Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory
+  x402_pay.facilitators:
+    class: Drupal\x402_pay\Facilitators
+    arguments: ['@http_client', '@x402_pay.psr17', '@config.factory', '@key.repository', '@lock', '@cache.default']
+  x402_pay.claims:
+    class: Drupal\x402_pay\ClaimStore
+    arguments: ['@database', '@datetime.time']
   x402_pay.log:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitator', '@x402_pay.log', '@x402_pay.chain_facilitator', '@event_dispatcher', '@settings', '@lock', '@x402_pay.remote_facilitator']
+    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']
@@ -44,3 +46,4 @@ services:
       $keys: '@key.repository'
       $logger: '@logger.channel.x402_pay'
   Drupal\x402_pay\Sweeper: '@x402_pay.sweeper'
+  Drupal\x402_pay\ClaimStore: '@x402_pay.claims'

@@ -14,6 +14,7 @@ use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\field\FieldConfigInterface;
+use Drupal\x402_pay\ClaimStore;
 use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Sweeper;
@@ -25,6 +26,7 @@ class X402PayHooks {
 
   public function __construct(
     private readonly Sweeper $sweeper,
+    private readonly ClaimStore $claims,
     private readonly RouteMatchInterface $routeMatch,
     private readonly EntityFieldManagerInterface $entityFieldManager,
   ) {}
@@ -59,11 +61,13 @@ class X402PayHooks {
   }
 
   /**
-   * Sweeps the seller wallets to the cold wallet, when on and due.
+   * Sweeps the seller wallets to the cold wallet, when on and due, and
+   * forgets the old payment claims.
    */
   #[Hook('cron')]
   public function cron(): void {
     $this->sweeper->cron();
+    $this->claims->prune();
   }
 
   /**

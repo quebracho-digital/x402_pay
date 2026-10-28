@@ -4,38 +4,50 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
-use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\x402_pay\Event\PaymentEvent;
+use GuzzleHttp\Psr7\HttpFactory;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
+use Quebracho\X402\EvmExact;
+use Quebracho\X402\FacilitatorException;
+use Quebracho\X402\PaymentHeaders;
+use Quebracho\X402\Settlement;
+use Quebracho\X402\Signer;
+use Quebracho\X402\SolanaExact;
+use Quebracho\X402\X402Middleware;
+use Symfony\Bridge\PsrHttpMessage\HttpFoundationFactoryInterface;
+use Symfony\Bridge\PsrHttpMessage\HttpMessageFactoryInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Charges for a response over x402, and settles only when it is a 2xx.
+ * Charges for a Drupal response over x402, and settles only on a 2xx.
  *
- * The flow: verify → run the handler → 2xx? settle → hand over the body
- * only once the money settled. A failed handler costs the buyer nothing;
- * a failed settlement gets the buyer nothing. Each paid response says how
- * long each step took, in a Server-Timing header.
+ * The protocol (402, verifying the payment, claiming it once, settling only
+ * a 2xx, the receipt header) is the library's X402Middleware. This class is
+ * what is Drupal's around it: the price and payTo of this request, the
+ * facilitator the site configured, the payment log and event, the deadline,
+ * Server-Timing, and the bridge between Symfony and PSR-7 messages.
+ *
+ * The flow: verify, claim, run the handler, 2xx? settle, hand over the body
+ * only once the money settled. A failed handler costs the buyer nothing; a
+ * failed settlement gets the buyer nothing.
  */
 class PaymentGate {
 
-
-  /**
-   * Milliseconds per step of the current payment, for Server-Timing.
-   */
-  private array $timings = [];
-
   public function __construct(
-    private readonly CircleFacilitator $facilitator,
+    private readonly Facilitators $facilitators,
     private readonly PaymentLog $log,
-    private readonly ?ChainFacilitator $chain = NULL,
+    private readonly ClaimStore $claims,
+    private readonly HttpFactory $psr17,
+    private readonly HttpMessageFactoryInterface $psrFactory,
+    private readonly HttpFoundationFactoryInterface $foundationFactory,
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
     private readonly ?Settings $settings = NULL,
-    private readonly ?LockBackendInterface $lock = NULL,
-    private readonly ?RemoteFacilitator $remote = NULL,
   ) {}
 
   /**
@@ -49,180 +61,189 @@ class PaymentGate {
    *   differ per listing.
    * @param array $resource
    *   url, description, mimeType; entity_type and entity_id, logged only.
-   * @param \Drupal\x402_pay\Signer|null $seller
+   * @param \Quebracho\X402\Signer|null $seller
    *   The payTo key, for the facilitator's seller proof; NULL when a Circle
    *   API key authenticates instead.
    * @param callable $handler
    *   Produces the paid response. Runs only after the payment verified.
    */
   public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
-    // On Solana the buyer builds the transaction around the fee payer of
-    // the facilitator that sponsors it, so the 402 names it.
-    if (str_starts_with($requirements['network'], 'solana:') && empty($requirements['extra']['feePayer'])) {
-      try {
-        $requirements['extra']['feePayer'] = $this->remote?->feePayer($requirements['network'])
+    $timings = [];
+    // What happened, for the log: filled by the steps below as they run.
+    $run = new \stdClass();
+    $run->handlerStatus = NULL;
+    $run->settlement = NULL;
+    $run->payer = NULL;
+    $run->error = NULL;
+    $run->unavailable = NULL;
+
+    try {
+      // On Solana the buyer builds the transaction around the fee payer of
+      // the facilitator that sponsors it, so the 402 names it.
+      if (str_starts_with($requirements['network'], 'solana:') && empty($requirements['extra']['feePayer'])) {
+        $requirements['extra']['feePayer'] = $this->facilitators->feePayer($requirements['network'])
           ?? throw new FacilitatorException('it names no fee payer for ' . $requirements['network']);
       }
-      catch (FacilitatorException $e) {
-        return new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502);
+      $facilitator = $this->facilitators->for($requirements['network'], $seller);
+    }
+    catch (FacilitatorException $e) {
+      return new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502);
+    }
+    $timed = function (string $step, callable $do) use (&$timings): mixed {
+      $start = hrtime(TRUE);
+      try {
+        return $do();
       }
-    }
-    $header = $request->headers->get(PaymentHeaders::SIGNATURE);
-    if ($header === NULL) {
-      return $this->required($requirements, $resource, 'PAYMENT-SIGNATURE header is required');
-    }
-    try {
-      $payment = PaymentHeaders::decode($header);
-    }
-    catch (InvalidPaymentException $e) {
-      return new JsonResponse(['error' => $e->getMessage()], 400);
-    }
-    if (!$this->matches($payment['accepted'] ?? [], $requirements)) {
-      return $this->required($requirements, $resource, 'The payment does not match the requirements');
-    }
+      finally {
+        $timings[$step] = round((hrtime(TRUE) - $start) / 1e6, 1);
+      }
+    };
 
-    // One authorization, one handler run at a time: the same payment sent
-    // N times at once would run the handler N times and send N settlements,
-    // all but one reverting on our gas (x402Scope SR5). Once it settles the
-    // nonce is spent on chain, so verify refuses it from then on.
-    // EVM: the authorization's signer and nonce. Solana: the signed
-    // transaction itself, which lands once.
-    $auth = $payment['payload']['authorization'] ?? NULL;
-    $claim = 'x402_pay.payment:' . hash('sha256', $auth
-      ? strtolower(($auth['from'] ?? '') . ':' . ($auth['nonce'] ?? ''))
-      : (string) ($payment['payload']['transaction'] ?? ''));
-    // Longer than the slowest handler (10 min) plus settling.
-    if ($this->lock && !$this->lock->acquire($claim, 900)) {
-      return new JsonResponse(['error' => 'This payment is already being used'], 409);
+    // What the chain alone knows (balance, a spent nonce) is the
+    // facilitator's to say; the signature and the terms the library checked.
+    // LIBRARY-FEEDBACK G3: X402Middleware has no online verify step.
+    $verify = function (array $payment, array $req) use ($facilitator, $timed, $run): ?string {
+      try {
+        $verified = $timed('verify', fn() => $facilitator->verify($payment, $req));
+      }
+      catch (FacilitatorException $e) {
+        $run->unavailable = $e->getMessage();
+        return 'facilitator_unavailable';
+      }
+      $run->payer = $verified['payer'] ?? NULL;
+      return empty($verified['isValid']) ? ($verified['invalidReason'] ?? 'invalid_payment') : NULL;
+    };
+
+    $settle = function (array $payment, array $req) use ($facilitator, $timed, $run): array {
+      try {
+        $receipt = $timed('settle', fn() => $facilitator->settle($payment, $req));
+      }
+      catch (FacilitatorException $e) {
+        // LIBRARY-FEEDBACK G5: a throwing $settle becomes a plain 402 with
+        // 'unexpected_settle_error'; we tell the buyer it was not them.
+        $run->unavailable = $e->getMessage();
+        $receipt = ['success' => FALSE, 'errorReason' => 'facilitator_unavailable', 'transaction' => '', 'network' => $req['network']];
+      }
+      $run->settlement = $receipt;
+      if (empty($receipt['success'])) {
+        // Nothing broadcast: the same payment may be offered again. A
+        // transaction sent but not confirmed (settlement_pending) stays
+        // claimed, since it may still land.
+        if (($receipt['transaction'] ?? '') === '') {
+          $this->claims->release(Settlement::key($payment));
+        }
+        return $receipt;
+      }
+      return [
+        'success' => TRUE,
+        'transaction' => $receipt['transaction'],
+        'network' => $receipt['network'] ?? $req['network'],
+        'payer' => $receipt['payer'] ?? $run->payer,
+      ];
+    };
+
+    // The payment is already decoded and verified when the handler runs.
+    $release = fn() => $this->claims->release(Settlement::key(PaymentHeaders::decode((string) $request->headers->get(PaymentHeaders::SIGNATURE))));
+    $overDeadline = $this->deadline($request);
+    $paid = function () use ($handler, $timed, $run, $release, $overDeadline): ResponseInterface {
+      $response = $timed('handler', $handler);
+      $run->handlerStatus = $response->getStatusCode();
+      // After settling (the upfront flow) the money moved: keep the claim.
+      $unspent = $run->settlement === NULL;
+      if (!$response->isSuccessful()) {
+        // Nothing delivered, nothing charged: the payment is still good.
+        $unspent && $release();
+      }
+      elseif ($unspent && $overDeadline && $overDeadline()) {
+        // A proxy that drops slow responses (Cloudflare's tunnel: 524 at
+        // 100 s) leaves the buyer without the body, so charging them would
+        // be for nothing.
+        $run->error = 'deadline';
+        $release();
+        $response = new JsonResponse(['error' => 'Took too long: not charged, try a smaller input'], 504);
+      }
+      return $this->psrFactory->createResponse($response);
+    };
+    $inner = new class($paid) implements RequestHandlerInterface {
+
+      public function __construct(private readonly \Closure $run) {}
+
+      public function handle(ServerRequestInterface $request): ResponseInterface {
+        return ($this->run)();
+      }
+
+    };
+
+    $middleware = new X402Middleware(
+      schemes: [new EvmExact(), new SolanaExact()],
+      price: fn() => [$requirements],
+      claim: $this->claims,
+      responses: $this->psr17,
+      streams: $this->psr17,
+      settle: $settle,
+      events: $this->eventDispatcher,
+      // LIBRARY-FEEDBACK G2, G3: the 402's `resource` with description and
+      // mimeType; an online verify between the offline one and the claim.
+      resource: fn() => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
+      verify: $verify,
+    );
+    $response = $this->foundationFactory->createResponse($middleware->process($this->psrFactory->createRequest($request), $inner));
+
+    if ($run->unavailable !== NULL) {
+      // The facilitator, not the buyer, is the problem: 502, as before.
+      $response = new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $run->unavailable], 502);
     }
-    try {
-      return $this->charge($request, $requirements, $resource, $seller, $handler, $payment);
-    }
-    finally {
-      $this->lock?->release($claim);
-    }
+    $this->recordRun($request, $requirements, $resource, $run);
+    $response->headers->set('Server-Timing', implode(', ', array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($timings), $timings)));
+    return $response;
   }
 
   /**
-   * Verify, run the handler, settle: handle() once the payment is claimed.
+   * Logs the outcome of a payment that reached the handler or the settle.
+   *
+   * A 402 for a missing, invalid or repeated payment is not an attempt to
+   * sell, and is not logged.
    */
-  private function charge(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler, array $payment): Response {
-    // Our own facilitator for the networks it settles, then the one set for
-    // the network, then Circle.
-    $facilitator = match (TRUE) {
-      (bool) $this->chain?->handles($requirements['network']) => $this->chain,
-      (bool) $this->remote?->handles($requirements['network']) => $this->remote,
-      default => $this->facilitator,
-    };
-    $this->timings = [];
-    if (($requirements['extra']['paymentFlow'] ?? NULL) === 'upfront') {
-      return $this->upfront($request, $requirements, $resource, $seller, $handler, $payment, $facilitator);
+  private function recordRun(Request $request, array $requirements, array $resource, \stdClass $run): void {
+    $settlement = $run->settlement;
+    if ($run->handlerStatus === NULL && $settlement === NULL) {
+      return;
     }
-    try {
-      $verified = $this->timed('verify', fn() => $facilitator->verify($payment, $requirements, $seller));
-    }
-    catch (FacilitatorException $e) {
-      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
-    }
-    if (empty($verified['isValid'])) {
-      return $this->withTimings($this->required($requirements, $resource, $verified['invalidReason'] ?? 'invalid_payment'));
-    }
-
-    $response = $this->timed('handler', $handler);
     $entry = [
       'resource' => $resource['url'],
       'network' => $requirements['network'],
       'amount' => $requirements['amount'],
       'pay_to' => $requirements['payTo'],
-      'payer' => $verified['payer'] ?? NULL,
-      'handler_status' => $response->getStatusCode(),
-      'transaction' => NULL,
+      'payer' => $settlement['payer'] ?? $run->payer,
+      'handler_status' => $run->handlerStatus,
+      'transaction' => $settlement['transaction'] ?? NULL,
       'entity_type' => $resource['entity_type'] ?? NULL,
       'entity_id' => $resource['entity_id'] ?? NULL,
     ];
-    if (!$response->isSuccessful()) {
-      $this->record($request, ['status' => 'not_settled'] + $entry);
-      return $this->withTimings($response);
+    if ($settlement === NULL) {
+      $this->record($request, ['status' => 'not_settled', 'error' => $run->error] + $entry);
     }
-    // A proxy that drops slow responses (Cloudflare's tunnel: 524 at 100 s)
-    // leaves the buyer without the body, so charging them would be for
-    // nothing. Off unless settings.php sets it, e.g.
-    // $settings['x402_pay_deadline'] = 95;
-    // ponytail: one limit for the whole site; long jobs go async later.
-    $deadline = $this->settings?->get('x402_pay_deadline');
-    $started = (float) $request->server->get('REQUEST_TIME_FLOAT', microtime(TRUE));
-    if ($deadline && microtime(TRUE) - $started > $deadline) {
-      $this->record($request, ['status' => 'not_settled', 'error' => 'deadline'] + $entry);
-      return $this->withTimings(new JsonResponse(['error' => sprintf('Took over %d s: not charged, try a smaller input', $deadline)], 504));
+    elseif (!empty($settlement['success'])) {
+      $failed = $run->handlerStatus !== NULL && ($run->handlerStatus < 200 || $run->handlerStatus >= 300);
+      $this->record($request, ['status' => 'settled', 'error' => $failed ? 'delivery failed after settling: refund' : NULL] + $entry);
     }
-
-    try {
-      $settlement = $this->timed('settle', fn() => $facilitator->settle($payment, $requirements, $seller));
-    }
-    catch (FacilitatorException $e) {
-      $this->record($request, ['status' => 'failed', 'error' => $e->getMessage()] + $entry);
-      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
-    }
-    if (empty($settlement['success'])) {
+    elseif ($run->handlerStatus !== NULL) {
+      // Delivered but not paid: the body was withheld. (Settling that fails
+      // before the handler ran, in the upfront flow, moved nothing.)
       $this->record($request, ['status' => 'failed', 'error' => $settlement['errorReason'] ?? NULL] + $entry);
-      $failed = new JsonResponse(['error' => $settlement['errorReason'] ?? 'settlement_failed'], 402);
-      $failed->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode($settlement));
-      return $this->withTimings($failed);
     }
-
-    $this->record($request, [
-      'status' => 'settled',
-      'transaction' => $settlement['transaction'],
-      'payer' => $settlement['payer'] ?? $entry['payer'],
-    ] + $entry);
-    $response->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode([
-      'success' => TRUE,
-      'transaction' => $settlement['transaction'],
-      'network' => $settlement['network'] ?? $requirements['network'],
-      'payer' => $settlement['payer'] ?? $entry['payer'],
-    ]));
-    return $this->withTimings($response);
   }
 
   /**
-   * Settle, then run the handler: x402's `upfront` flow (PriceEvent).
+   * A check for whether the request has run past the site's deadline.
    *
-   * No verify: settling checks the payment. Once settled the buyer has
-   * paid, so a failing handler is logged settled with its status, for a
-   * refund by hand.
+   * Off unless settings.php sets it, e.g. $settings['x402_pay_deadline'] = 95;
+   * ponytail: one limit for the whole site; long jobs go async later.
    */
-  private function upfront(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler, array $payment, CircleFacilitator|ChainFacilitator|RemoteFacilitator $facilitator): Response {
-    try {
-      $settlement = $this->timed('settle', fn() => $facilitator->settle($payment, $requirements, $seller));
-    }
-    catch (FacilitatorException $e) {
-      return $this->withTimings(new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $e->getMessage()], 502));
-    }
-    if (empty($settlement['success'])) {
-      // Nothing moved: the buyer may pay again.
-      return $this->withTimings($this->required($requirements, $resource, $settlement['errorReason'] ?? 'settlement_failed'));
-    }
-    $response = $this->timed('handler', $handler);
-    $this->record($request, [
-      'status' => 'settled',
-      'transaction' => $settlement['transaction'],
-      'payer' => $settlement['payer'] ?? NULL,
-      'handler_status' => $response->getStatusCode(),
-      'error' => $response->isSuccessful() ? NULL : 'delivery failed after settling: refund',
-      'resource' => $resource['url'],
-      'network' => $requirements['network'],
-      'amount' => $requirements['amount'],
-      'pay_to' => $requirements['payTo'],
-      'entity_type' => $resource['entity_type'] ?? NULL,
-      'entity_id' => $resource['entity_id'] ?? NULL,
-    ]);
-    $response->headers->set(PaymentHeaders::RESPONSE, PaymentHeaders::encode([
-      'success' => TRUE,
-      'transaction' => $settlement['transaction'],
-      'network' => $settlement['network'] ?? $requirements['network'],
-      'payer' => $settlement['payer'] ?? NULL,
-    ]));
-    return $this->withTimings($response);
+  private function deadline(Request $request): ?\Closure {
+    $deadline = $this->settings?->get('x402_pay_deadline');
+    $started = (float) $request->server->get('REQUEST_TIME_FLOAT', microtime(TRUE));
+    return $deadline ? fn(): bool => microtime(TRUE) - $started > $deadline : NULL;
   }
 
   /**
@@ -231,64 +252,6 @@ class PaymentGate {
   private function record(Request $request, array $entry): void {
     $this->log->record($entry);
     $this->eventDispatcher?->dispatch(new PaymentEvent($entry, $request));
-  }
-
-  /**
-   * Runs one step and keeps how long it took, even when it throws.
-   */
-  private function timed(string $step, callable $run): mixed {
-    $start = hrtime(TRUE);
-    try {
-      return $run();
-    }
-    finally {
-      $this->timings[$step] = round((hrtime(TRUE) - $start) / 1e6, 1);
-    }
-  }
-
-  /**
-   * Adds how long each step took as a Server-Timing header.
-   */
-  private function withTimings(Response $response): Response {
-    $response->headers->set('Server-Timing', implode(', ', array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($this->timings), $this->timings)));
-    return $response;
-  }
-
-  /**
-   * The 402 that asks for payment, as JSON and as PAYMENT-REQUIRED.
-   */
-  private function required(array $requirements, array $resource, string $error): Response {
-    $required = [
-      'x402Version' => 2,
-      'error' => $error,
-      'resource' => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
-      'accepts' => [$requirements],
-    ];
-    $response = new JsonResponse($required, 402);
-    $response->headers->set(PaymentHeaders::REQUIRED, PaymentHeaders::encode($required));
-    return $response;
-  }
-
-  /**
-   * Whether the buyer pays exactly what we ask.
-   *
-   * Same scheme, chain, token, seller and amount. EVM addresses compare
-   * case-insensitively; base58 (Solana) is case-sensitive.
-   */
-  private function matches(array $accepted, array $requirements): bool {
-    foreach (['scheme', 'network', 'amount'] as $k) {
-      if ((string) ($accepted[$k] ?? '') !== (string) $requirements[$k]) {
-        return FALSE;
-      }
-    }
-    $evm = str_starts_with($requirements['network'], 'eip155:');
-    foreach (['asset', 'payTo'] as $k) {
-      [$a, $b] = [(string) ($accepted[$k] ?? ''), (string) $requirements[$k]];
-      if ($evm ? strcasecmp($a, $b) !== 0 : $a !== $b) {
-        return FALSE;
-      }
-    }
-    return TRUE;
   }
 
 }

@@ -378,8 +378,8 @@ class X402PriceItem extends FieldItemBase {
     }
     // Circle needs its API key to settle for an address alone; ours or
     // another facilitator do not.
-    elseif (!\Drupal::service('x402_pay.chain_facilitator')->handles($network)
-      && !\Drupal::service('x402_pay.remote_facilitator')->handles($network)
+    elseif (!\Drupal::service('x402_pay.facilitators')->settlesItself($network)
+      && !\Drupal::service('x402_pay.facilitators')->hasRemote($network)
       && \Drupal::config('x402_pay.settings')->get('facilitator.auth') !== 'api_key') {
       $form_state->setError($element, t('Selling to an address alone needs a Circle API key: set it in the <a href=":url">x402 settings</a>, or choose a seller key.', [':url' => Url::fromRoute('x402_pay.settings')->toString()]));
     }

@@ -11,6 +11,15 @@
 function x402_pay_schema(): array {
   $address = ['type' => 'varchar_ascii', 'length' => 64];
   return [
+    'x402_pay_claim' => [
+      'description' => 'Payments already used: each buys one delivery (the library\'s claim).',
+      'fields' => [
+        'claim_key' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'created' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+      ],
+      'primary key' => ['claim_key'],
+      'indexes' => ['created' => ['created']],
+    ],
     'x402_pay_log' => [
       'description' => 'Every paid request: what was bought, by whom, and what happened.',
       'fields' => [
@@ -102,5 +111,15 @@ function x402_pay_update_10004(): void {
     if (preg_match('#/x402/([a-z0-9_]+)/([^/]+)/#', (string) parse_url($row->resource, PHP_URL_PATH), $m)) {
       $database->update('x402_pay_log')->fields(['entity_type' => $m[1], 'entity_id' => $m[2]])->condition('id', $row->id)->execute();
     }
+  }
+}
+
+/**
+ * Adds the table of claimed payments, which replaces the per-request lock.
+ */
+function x402_pay_update_10005(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('x402_pay_claim')) {
+    $schema->createTable('x402_pay_claim', x402_pay_schema()['x402_pay_claim']);
   }
 }
