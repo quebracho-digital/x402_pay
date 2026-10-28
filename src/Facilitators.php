@@ -28,6 +28,9 @@ use Quebracho\X402\Signer;
  * serializes our gas wallet.
  */
 class Facilitators {
+  // LIBRARY-FEEDBACK G7: the Facilitator interface and its three clients
+  // (HttpFacilitator, CircleFacilitator, ChainFacilitator) do not exist yet.
+
 
   /**
    * How long /supported is trusted, in seconds.

@@ -30,7 +30,7 @@ final class ClaimStoreTest extends KernelTestBase {
   /**
    * The first claim wins, the second loses, a release frees it.
    */
-  public function testAPaymentIsClaimedOnce(): void {
+  public function testPaymentIsClaimedOnce(): void {
     $claims = new ClaimStore($this->container->get('database'), $this->container->get('datetime.time'));
     $key = hash('sha256', 'payment');
     $this->assertTrue($claims($key));

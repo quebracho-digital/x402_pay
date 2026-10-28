@@ -26,6 +26,8 @@ use Quebracho\X402\Transfer;
  * cost.
  */
 class Sweeper {
+  // LIBRARY-FEEDBACK G11: Rpc::number() and Rpc::word() are assumed.
+
 
   /**
    * Native USDC on Arc has 18 decimals; the token's interface, 6.
