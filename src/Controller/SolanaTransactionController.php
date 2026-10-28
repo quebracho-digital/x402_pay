@@ -7,7 +7,7 @@ namespace Drupal\x402_pay\Controller;
 use Drupal\Core\DependencyInjection\AutowireTrait;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Flood\FloodInterface;
-use Drupal\x402_pay\Networks;
+use Quebracho\X402\Networks;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Solana;
 use GuzzleHttp\ClientInterface;
@@ -49,7 +49,7 @@ final class SolanaTransactionController implements ContainerInjectionInterface {
     $body = json_decode($request->getContent(), TRUE);
     $req = $body['accepted'] ?? NULL;
     $buyer = $body['buyer'] ?? NULL;
-    $network = Networks::ALL[$req['network'] ?? ''] ?? NULL;
+    $network = Networks::all()[$req['network'] ?? ''] ?? NULL;
     // Only what this site would ask: a Solana network it knows, its USDC,
     // addresses and an amount; anything else is for no 402 of ours.
     $addresses = [$buyer, $req['payTo'] ?? NULL, $req['extra']['feePayer'] ?? NULL];

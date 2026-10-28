@@ -6,7 +6,7 @@ namespace Drupal\x402_pay\PageCache;
 
 use Drupal\Core\PageCache\RequestPolicyInterface;
 use Drupal\x402_pay\PathProcessor\MarkdownPathProcessor;
-use Drupal\x402_pay\PaymentHeaders;
+use Quebracho\X402\PaymentHeaders;
 use Symfony\Component\HttpFoundation\Request;
 
 /**

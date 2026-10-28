@@ -8,7 +8,7 @@ use Drupal\Core\Flood\FloodInterface;
 use Drupal\Tests\UnitTestCase;
 use Drupal\x402_pay\Controller\SolanaTransactionController;
 use Drupal\x402_pay\Buyer;
-use Drupal\x402_pay\PaymentHeaders;
+use Quebracho\X402\PaymentHeaders;
 use Drupal\x402_pay\Solana;
 use Drupal\x402_pay\SolanaKey;
 use GuzzleHttp\Client;

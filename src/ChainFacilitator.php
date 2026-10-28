@@ -251,7 +251,7 @@ class ChainFacilitator {
    * The network's node.
    */
   private function rpc(string $network): Rpc {
-    return new Rpc($this->httpClient, Networks::ALL[$network]['rpc'] ?? throw new FacilitatorException("Unsupported network: $network."));
+    return new Rpc($this->httpClient, Networks::all()[$network]['rpc'] ?? throw new FacilitatorException("Unsupported network: $network."));
   }
 
   /**

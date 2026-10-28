@@ -14,8 +14,8 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Url;
-use Drupal\x402_pay\Networks;
-use Drupal\x402_pay\Signer;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Signer;
 
 /**
  * Makes any fieldable entity payable over x402 by adding the field.
@@ -49,7 +49,7 @@ class X402PriceItem extends FieldItemBase {
     return [
       'enabled' => TRUE,
       'amount' => '0.01',
-      'network' => array_key_first(Networks::ALL),
+      'network' => 'eip155:5042002',
       'key_id' => '',
       'pay_to' => '',
       'allow_override' => FALSE,
@@ -269,7 +269,7 @@ class X402PriceItem extends FieldItemBase {
       'network' => [
         '#type' => 'select',
         '#title' => $this->t('Network'),
-        '#options' => array_map(fn($n) => $n['label'], Networks::ALL),
+        '#options' => array_map(fn($n) => $n['label'], Networks::all()),
         '#default_value' => $this->getSetting('network'),
         '#required' => TRUE,
       ],
@@ -318,7 +318,8 @@ class X402PriceItem extends FieldItemBase {
    * Form validation: a price the network can charge exactly.
    */
   public static function validateAmount(array $element, FormStateInterface $form_state): void {
-    $network = Networks::ALL[$form_state->getValue(['settings', 'network'])] ?? reset(Networks::ALL);
+    $networks = Networks::all();
+    $network = $networks[$form_state->getValue(['settings', 'network'])] ?? reset($networks);
     try {
       Networks::atomic(trim((string) $element['#value']), $network['decimals']);
     }

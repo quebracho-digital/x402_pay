@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Drupal\x402_pay\Drush\Commands;
 
 use Drupal\x402_pay\Buyer;
-use Drupal\x402_pay\Networks;
-use Drupal\x402_pay\Signer;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Signer;
 use Drupal\x402_pay\SolanaKey;
 use Drupal\x402_pay\Sweeper;
 use GuzzleHttp\ClientInterface;
@@ -71,7 +71,7 @@ final class X402Commands extends DrushCommands {
       }
     });
     $this->io()->writeln(sprintf('buyer %s → HTTP %d %s', $buyer->address(), $paid['status'], $paid['contentType']));
-    $this->io()->writeln($paid['tx'] ? 'tx ' . (Networks::ALL[$paid['network']]['explorer'] ?? '') . $paid['tx'] : 'not charged');
+    $this->io()->writeln($paid['tx'] ? 'tx ' . (Networks::all()[$paid['network']]['explorer'] ?? '') . $paid['tx'] : 'not charged');
     $this->io()->writeln("---\n" . $paid['body']);
   }
 

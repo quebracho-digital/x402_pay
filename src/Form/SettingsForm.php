@@ -9,8 +9,8 @@ use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\key\KeyRepositoryInterface;
-use Drupal\x402_pay\Networks;
-use Drupal\x402_pay\Signer;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Signer;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -78,7 +78,7 @@ final class SettingsForm extends ConfigFormBase {
         '#type' => 'checkboxes',
         '#title' => $this->t('Networks this site settles itself'),
         '#description' => $this->t("Our own facilitator instead of Circle's: the site sends each buyer's signed transfer on chain. Sellers can be addresses alone."),
-        '#options' => array_map(fn($n) => $n['label'], array_filter(Networks::ALL, fn($id) => str_starts_with($id, 'eip155:'), ARRAY_FILTER_USE_KEY)),
+        '#options' => array_map(fn($n) => $n['label'], array_filter(Networks::all(), fn($id) => str_starts_with($id, 'eip155:'), ARRAY_FILTER_USE_KEY)),
         '#default_value' => $config->get('facilitator.own_networks') ?? [],
       ],
       'own_key_id' => [
@@ -96,7 +96,7 @@ final class SettingsForm extends ConfigFormBase {
         '#open' => (bool) $config->get('facilitator.remote'),
       ],
     ];
-    foreach (Networks::ALL as $network => $info) {
+    foreach (Networks::all() as $network => $info) {
       $form['facilitator']['remote'][$network] = [
         '#type' => 'fieldset',
         '#title' => $info['label'],
@@ -174,7 +174,7 @@ final class SettingsForm extends ConfigFormBase {
     }
     foreach (array_filter($facilitator['own_networks']) as $network) {
       if (trim((string) $facilitator['remote'][$network]['url']) !== '') {
-        $form_state->setErrorByName("facilitator][remote][$network][url", $this->t('%network is settled by this site: leave its other facilitator empty.', ['%network' => Networks::ALL[$network]['label']]));
+        $form_state->setErrorByName("facilitator][remote][$network][url", $this->t('%network is settled by this site: leave its other facilitator empty.', ['%network' => Networks::all()[$network]['label']]));
       }
     }
 

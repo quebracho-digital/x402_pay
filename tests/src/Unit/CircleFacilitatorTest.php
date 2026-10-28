@@ -11,7 +11,7 @@ use Drupal\x402_pay\Eip712;
 use Drupal\x402_pay\FacilitatorException;
 use Drupal\key\KeyInterface;
 use Drupal\key\KeyRepositoryInterface;
-use Drupal\x402_pay\Signer;
+use Quebracho\X402\Signer;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;

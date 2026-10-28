@@ -8,7 +8,7 @@ use Drupal\Core\Field\Attribute\FieldFormatter;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Field\FormatterBase;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\x402_pay\Networks;
+use Quebracho\X402\Networks;
 
 /**
  * The price agents pay, e.g. "USD 0.01 · Arc testnet (USDC)".
@@ -27,7 +27,7 @@ class X402PriceFormatter extends FormatterBase {
     $elements = [];
     foreach ($items as $delta => $item) {
       if ($item->isPayable()) {
-        $network = Networks::ALL[$this->getFieldSetting('network')]['label'] ?? $this->getFieldSetting('network');
+        $network = Networks::all()[$this->getFieldSetting('network')]['label'] ?? $this->getFieldSetting('network');
         $elements[$delta] = ['#plain_text' => "USD {$item->price()} · $network"];
       }
     }

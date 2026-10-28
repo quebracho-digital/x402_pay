@@ -8,7 +8,7 @@ use Drupal\Core\Url;
 use Drupal\views\Attribute\ViewsField;
 use Drupal\views\Plugin\views\field\FieldPluginBase;
 use Drupal\views\ResultRow;
-use Drupal\x402_pay\Networks;
+use Quebracho\X402\Networks;
 
 /**
  * A transaction hash, shortened, linked to its network's explorer.
@@ -33,7 +33,7 @@ class X402Transaction extends FieldPluginBase {
     if ($tx === '') {
       return '';
     }
-    $explorer = Networks::ALL[$this->getValue($values, 'network')]['explorer'] ?? NULL;
+    $explorer = Networks::all()[$this->getValue($values, 'network')]['explorer'] ?? NULL;
     $short = substr($tx, 0, 10) . '…';
     if (!$explorer) {
       return ['#plain_text' => $short];

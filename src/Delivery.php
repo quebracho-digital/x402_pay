@@ -16,6 +16,7 @@ use Drupal\x402_pay\Event\DeliveryEvent;
 use Drupal\x402_pay\Event\PriceEvent;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use League\HTMLToMarkdown\HtmlConverter;
+use Quebracho\X402\Networks;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;

@@ -7,8 +7,8 @@ namespace Drupal\x402_pay\Event;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
-use Drupal\x402_pay\Networks;
-use Drupal\x402_pay\Signer;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Signer;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Contracts\EventDispatcher\Event;
 
@@ -187,7 +187,7 @@ final class PriceEvent extends Event {
   }
 
   /**
-   * Sells on another network than the field's: one of Networks::ALL.
+   * Sells on another network than the field's: one of Networks::all().
    *
    * On Solana, pay an address (setPayTo()): no key here settles there.
    *
@@ -195,7 +195,7 @@ final class PriceEvent extends Event {
    *   A network Networks does not list.
    */
   public function setNetwork(string $network): void {
-    $this->network = isset(Networks::ALL[$network]) ? $network : throw new \InvalidArgumentException("Unknown network $network.");
+    $this->network = isset(Networks::all()[$network]) ? $network : throw new \InvalidArgumentException("Unknown network $network.");
   }
 
   /**

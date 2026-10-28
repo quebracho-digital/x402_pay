@@ -10,7 +10,7 @@ use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Url;
 use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\PathProcessor\MarkdownPathProcessor;
-use Drupal\x402_pay\PaymentHeaders;
+use Quebracho\X402\PaymentHeaders;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;

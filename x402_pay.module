@@ -1,0 +1,11 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for x402 Pay.
+ *
+ * Hooks live in classes (src/Hook). This file only opens the mainnets the
+ * module sells on, so that every entry point (web, Drush, cron) sees them.
+ */
+
+\Drupal\x402_pay\ModuleNetworks::register();
