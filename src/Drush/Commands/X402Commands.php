@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay\Drush\Commands;
 
-use Drupal\x402_pay\Buyer;
-use Quebracho\X402\Networks;
-use Quebracho\X402\Signer;
-use Drupal\x402_pay\SolanaKey;
 use Drupal\x402_pay\Sweeper;
-use GuzzleHttp\ClientInterface;
 use Drush\Attributes as CLI;
 use Drush\Commands\AutowireTrait;
 use Drush\Commands\DrushCommands;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\HttpFactory;
+use Quebracho\X402\Budget;
+use Quebracho\X402\EvmExact;
+use Quebracho\X402\Networks;
+use Quebracho\X402\PayingHttpClient;
+use Quebracho\X402\Signer;
+use Quebracho\X402\SolanaExact;
+use Quebracho\X402\SolanaKey;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -25,8 +29,8 @@ final class X402Commands extends DrushCommands {
   public function __construct(
     #[Autowire(service: 'x402_pay.sweeper')]
     private readonly Sweeper $sweeper,
-    #[Autowire(service: 'http_client')]
-    private readonly ClientInterface $httpClient,
+    #[Autowire(service: 'x402_pay.psr17')]
+    private readonly HttpFactory $psr17,
   ) {
     parent::__construct();
   }
@@ -61,18 +65,32 @@ final class X402Commands extends DrushCommands {
   public function buy(string $url, array $options = ['input' => NULL, 'max' => '0.05']): void {
     $key = getenv('BUYER_PRIVATE_KEY') ?: throw new \RuntimeException('Set BUYER_PRIVATE_KEY.');
     $input = $options['input'] === NULL ? NULL : (json_decode($options['input'], TRUE) ?? throw new \InvalidArgumentException('--input is not JSON.'));
-    $max = (int) round((float) $options['max'] * 1e6);
-    $wallet = str_starts_with(trim($key), '0x') ? new Signer(trim($key)) : new SolanaKey($key);
-    $buyer = new Buyer($this->httpClient, $wallet);
-    $paid = $buyer->pay($url, $input, function (array $req) use ($max) {
+    $key = trim($key);
+    // One wallet, one family: an EVM key pays on EVM, a Solana key on Solana.
+    $evm = str_starts_with($key, '0x');
+    $wallet = $evm ? new Signer($key) : new SolanaKey($key);
+    $schemes = [$evm ? new EvmExact($wallet) : new SolanaExact($wallet)];
+    // The same maximum, in dollars, on every network the library knows.
+    $budget = new Budget(array_map(fn(array $n) => Networks::atomic((string) $options['max'], $n['decimals']), Networks::all()));
+    $paid = NULL;
+    // The paid retry waits as long as the payment can settle: a buyer that
+    // hangs up first may be charged for an answer it never reads.
+    // LIBRARY-FEEDBACK G9: PayingHttpClient has no timeout of its own.
+    $buyer = new PayingHttpClient(new Client(['timeout' => 120]), $schemes, $budget, function (array $req, array $receipt) use (&$paid) {
+      $paid = [$req, $receipt];
       $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));
-      if ((int) $req['amount'] > $max) {
-        throw new \RuntimeException(sprintf('Over the maximum: %s > %s atomic units. Not paid.', $req['amount'], $max));
-      }
     });
-    $this->io()->writeln(sprintf('buyer %s → HTTP %d %s', $buyer->address(), $paid['status'], $paid['contentType']));
-    $this->io()->writeln($paid['tx'] ? 'tx ' . (Networks::all()[$paid['network']]['explorer'] ?? '') . $paid['tx'] : 'not charged');
-    $this->io()->writeln("---\n" . $paid['body']);
+    $request = $this->psr17->createRequest($input === NULL ? 'GET' : 'POST', $url)->withHeader('Accept', '*/*');
+    if ($input !== NULL) {
+      $request = $request->withHeader('Content-Type', 'application/json')
+        ->withBody($this->psr17->createStream(json_encode($input ?: new \stdClass(), JSON_UNESCAPED_SLASHES)));
+    }
+    $response = $buyer->sendRequest($request);
+    $contentType = $response->getHeaderLine('Content-Type');
+    $this->io()->writeln(sprintf('buyer %s → HTTP %d %s', $wallet->address(), $response->getStatusCode(), $contentType));
+    $this->io()->writeln($paid ? 'tx ' . (Networks::get($paid[0]['network'])['explorer'] ?? '') . $paid[1]['transaction'] : 'not charged (nothing to pay, or over the maximum)');
+    $body = (string) $response->getBody();
+    $this->io()->writeln("---\n" . $body);
   }
 
 }

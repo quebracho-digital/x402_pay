@@ -43,7 +43,10 @@ services:
   x402_pay.sweeper:
     class: Drupal\x402_pay\Sweeper
     arguments:
+      $httpClient: '@http_client'
+      $psr17: '@x402_pay.psr17'
       $keys: '@key.repository'
       $logger: '@logger.channel.x402_pay'
   Drupal\x402_pay\Sweeper: '@x402_pay.sweeper'
   Drupal\x402_pay\ClaimStore: '@x402_pay.claims'
+  GuzzleHttp\Psr7\HttpFactory: '@x402_pay.psr17'

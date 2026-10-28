@@ -61,8 +61,9 @@ class X402PayHooks {
   }
 
   /**
-   * Sweeps the seller wallets to the cold wallet, when on and due, and
-   * forgets the old payment claims.
+   * Sweeps the seller wallets when due, and forgets old payment claims.
+   *
+   * The wallets go to the cold wallet, if sweeping is on.
    */
   #[Hook('cron')]
   public function cron(): void {

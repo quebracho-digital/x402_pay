@@ -8,4 +8,6 @@
  * module sells on, so that every entry point (web, Drush, cron) sees them.
  */
 
-\Drupal\x402_pay\ModuleNetworks::register();
+use Drupal\x402_pay\ModuleNetworks;
+
+ModuleNetworks::register();

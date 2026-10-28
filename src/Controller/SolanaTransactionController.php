@@ -7,11 +7,13 @@ namespace Drupal\x402_pay\Controller;
 use Drupal\Core\DependencyInjection\AutowireTrait;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Flood\FloodInterface;
-use Quebracho\X402\Networks;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
-use Drupal\x402_pay\Solana;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Psr7\HttpFactory;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Rpc;
+use Quebracho\X402\SolanaExact;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -20,7 +22,7 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * At /x402/solana/transaction: POST {accepted, buyer}, one entry of a 402's
  * accepts and the buyer's address. The answer is the transaction that pays
- * it, unsigned, as Buyer builds it for a key on the server: the wallet
+ * it, unsigned, as SolanaExact builds it for a key on the server: the wallet
  * signs it (solana:signTransaction) and the page sends it back as the
  * payload. Built here, so the browser needs no Solana library.
  */
@@ -35,6 +37,7 @@ final class SolanaTransactionController implements ContainerInjectionInterface {
 
   public function __construct(
     private readonly ClientInterface $httpClient,
+    private readonly HttpFactory $psr17,
     private readonly FloodInterface $flood,
   ) {}
 
@@ -58,7 +61,9 @@ final class SolanaTransactionController implements ContainerInjectionInterface {
       return new JsonResponse(['error' => 'Not a Solana payment this site asks for.'], 400);
     }
     try {
-      return new JsonResponse(['transaction' => Solana::pay($this->httpClient, $req, $buyer)]);
+      // LIBRARY-FEEDBACK G6: an unsigned transaction for a browser wallet.
+      $rpc = new Rpc($this->httpClient, $this->psr17, $this->psr17, $network['rpc']);
+      return new JsonResponse(['transaction' => (new SolanaExact(rpc: $rpc))->unsignedTransaction($req, $buyer)]);
     }
     catch (\RuntimeException | GuzzleException $e) {
       return new JsonResponse(['error' => 'The Solana node did not answer: ' . $e->getMessage()], 502);

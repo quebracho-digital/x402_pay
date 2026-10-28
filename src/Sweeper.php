@@ -8,8 +8,13 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\key\KeyRepositoryInterface;
-use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Psr7\HttpFactory;
+use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Quebracho\X402\Networks;
+use Quebracho\X402\Rpc;
+use Quebracho\X402\Signer;
+use Quebracho\X402\Transfer;
 
 /**
  * Moves what the seller wallets collected to a cold wallet.
@@ -27,8 +32,18 @@ class Sweeper {
    */
   private const NATIVE_PER_ATOMIC = '1000000000000';
 
+  /**
+   * The networks whose gas is the same USDC that is swept.
+   *
+   * Ponytail: a chain with another gas token needs that token on each
+   * wallet first, and a different fee calculation; add it here when it
+   * does.
+   */
+  private const ARC = ['eip155:5042002', 'eip155:5042'];
+
   public function __construct(
     private readonly ClientInterface $httpClient,
+    private readonly HttpFactory $psr17,
     private readonly ConfigFactoryInterface $config,
     private readonly KeyRepositoryInterface $keys,
     private readonly StateInterface $state,
@@ -75,9 +90,8 @@ class Sweeper {
         $this->logger->error('Sweep: the key @id is not an EVM private key.', ['@id' => $id]);
         continue;
       }
-      // ponytail: every network listed is Arc, whose gas is USDC; a chain
-      // with another gas token needs that token on each wallet first.
-      foreach (Networks::ALL as $network => $token) {
+      foreach (self::ARC as $network) {
+        $token = Networks::get($network);
         $row = $this->one($from, $network, $token, $to, $min, $send);
         if ($row['balance'] !== '0' || $row['error']) {
           $rows[] = $row;
@@ -100,7 +114,7 @@ class Sweeper {
       'error' => NULL,
     ];
     try {
-      $rpc = new Rpc($this->httpClient, $token['rpc']);
+      $rpc = new Rpc($this->httpClient, $this->psr17, $this->psr17, $token['rpc']);
       $balanceOf = ['to' => $token['asset'], 'data' => '0x70a08231' . Rpc::word($from->address())];
       $balance = Rpc::number($rpc('eth_call', [$balanceOf, 'latest']));
       $row['balance'] = gmp_strval($balance);

@@ -9,11 +9,13 @@ use Drupal\Core\State\StateInterface;
 use Drupal\key\KeyInterface;
 use Drupal\key\KeyRepositoryInterface;
 use Drupal\Tests\UnitTestCase;
+use Drupal\x402_pay\ModuleNetworks;
 use Drupal\x402_pay\Sweeper;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\HttpFactory;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Group;
 use Psr\Log\NullLogger;
@@ -30,6 +32,14 @@ final class SweeperTest extends UnitTestCase {
    * The JSON-RPC requests sent.
    */
   private array $history = [];
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    parent::setUp();
+    ModuleNetworks::register();
+  }
 
   /**
    * A sweeper of Anvil's first key, answering RPC calls by method.
@@ -50,7 +60,7 @@ final class SweeperTest extends UnitTestCase {
     $keys->method('getKey')->willReturn($key);
     $sweep = ['to' => self::COLD, 'keys' => ['seller'], 'min' => $min];
     $config = $this->getConfigFactoryStub(['x402_pay.settings' => ['sweep' => $sweep]]);
-    return new Sweeper(new Client(['handler' => $stack]), $config, $keys, $this->createMock(StateInterface::class), $this->createMock(TimeInterface::class), new NullLogger());
+    return new Sweeper(new Client(['handler' => $stack]), new HttpFactory(), $config, $keys, $this->createMock(StateInterface::class), $this->createMock(TimeInterface::class), new NullLogger());
   }
 
   /**

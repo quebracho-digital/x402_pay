@@ -122,7 +122,12 @@ class PaymentGate {
         // LIBRARY-FEEDBACK G5: a throwing $settle becomes a plain 402 with
         // 'unexpected_settle_error'; we tell the buyer it was not them.
         $run->unavailable = $e->getMessage();
-        $receipt = ['success' => FALSE, 'errorReason' => 'facilitator_unavailable', 'transaction' => '', 'network' => $req['network']];
+        $receipt = [
+          'success' => FALSE,
+          'errorReason' => 'facilitator_unavailable',
+          'transaction' => '',
+          'network' => $req['network'],
+        ];
       }
       $run->settlement = $receipt;
       if (empty($receipt['success'])) {
@@ -143,7 +148,8 @@ class PaymentGate {
     };
 
     // The payment is already decoded and verified when the handler runs.
-    $release = fn() => $this->claims->release(Settlement::key(PaymentHeaders::decode((string) $request->headers->get(PaymentHeaders::SIGNATURE))));
+    $payment = fn(): array => PaymentHeaders::decode((string) $request->headers->get(PaymentHeaders::SIGNATURE));
+    $release = fn() => $this->claims->release(Settlement::key($payment()));
     $overDeadline = $this->deadline($request);
     $paid = function () use ($handler, $timed, $run, $release, $overDeadline): ResponseInterface {
       $response = $timed('handler', $handler);
@@ -168,6 +174,9 @@ class PaymentGate {
 
       public function __construct(private readonly \Closure $run) {}
 
+      /**
+       * {@inheritdoc}
+       */
       public function handle(ServerRequestInterface $request): ResponseInterface {
         return ($this->run)();
       }
@@ -194,7 +203,8 @@ class PaymentGate {
       $response = new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $run->unavailable], 502);
     }
     $this->recordRun($request, $requirements, $resource, $run);
-    $response->headers->set('Server-Timing', implode(', ', array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($timings), $timings)));
+    $steps = array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($timings), $timings);
+    $response->headers->set('Server-Timing', implode(', ', $steps));
     return $response;
   }
 
@@ -225,7 +235,8 @@ class PaymentGate {
     }
     elseif (!empty($settlement['success'])) {
       $failed = $run->handlerStatus !== NULL && ($run->handlerStatus < 200 || $run->handlerStatus >= 300);
-      $this->record($request, ['status' => 'settled', 'error' => $failed ? 'delivery failed after settling: refund' : NULL] + $entry);
+      $error = $failed ? 'delivery failed after settling: refund' : NULL;
+      $this->record($request, ['status' => 'settled', 'error' => $error] + $entry);
     }
     elseif ($run->handlerStatus !== NULL) {
       // Delivered but not paid: the body was withheld. (Settling that fails
