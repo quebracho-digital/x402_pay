@@ -26,6 +26,57 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
+## 2026-10-28 (unreleased)
+
+### The protocol is a library; the module is Drupal
+
+x402 itself (EIP-712, signatures, payment headers, networks, the
+`exact` schemes, the 402 / verify / claim / settle-on-2xx middleware,
+facilitator clients, the paying client) is `quebracho/x402`, MIT. The
+module keeps what only Drupal has: the price and `payTo` of each request,
+config entities and the settings form, permissions, the payment log and
+events, the page cache rules, Key module secrets, the lock around our gas
+wallet, the sweeper's cron.
+
+- **Why:** one author wrote both and the library is the hackathon's
+  deliverable (decisions/0029 of the hub); two copies of signing code is
+  how they drift apart, and signing code is where a drift costs money.
+- **Done as a test:** the module was refactored against the library's
+  interface as it is, without patching the library. Every place the
+  interface fell short is in [LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md),
+  and the code is written as if the fix existed. **It does not run until
+  the library has what that file lists** (Solana, the facilitator
+  clients, a few hooks in the middleware).
+- **Kept the licences apart:** the module stays GPL-2.0-or-later and
+  includes MIT code, which is allowed; the library copies nothing from
+  here any more.
+- **Rejected:** keeping our own `PaymentGate` flow beside the library's
+  middleware "for now". It is the thing most worth sharing, and the
+  tests that held it (`PaymentGateTest`) now belong to the library.
+
+### A claim per payment, in the database
+
+A payment buys one delivery. The library asks for a `claim(key): bool`
+before it runs the handler; `ClaimStore` is a table with a unique key,
+atomic across processes and hosts. It replaces the lock held while a
+request ran, which only covered concurrent copies and relied on the chain
+to refuse the repeat later.
+
+- **Released** when nothing was delivered (the handler failed, the
+  deadline passed) or nothing was broadcast (settling failed with no
+  transaction), so a failed delivery does not burn the buyer's signature.
+  **Kept** after a transaction was sent and did not confirm
+  (`settlement_pending`): it may still land.
+- **A repeated payment** now gets a 402 `duplicate_settlement`, not a 409.
+- **Revisit** if the table grows: rows older than a day are pruned on cron.
+
+### Mainnets are the module's choice
+
+The library ships testnets and says whether a chain is a testnet is the
+caller's business. `ModuleNetworks` adds Arc and Solana mainnet at load.
+The field's default network is now written down (Arc testnet) instead of
+being the first of a list that is no longer ours.
+
 ## 2026-10-25 (1.0.0-beta2)
 
 ### Only an HTML page is free for people

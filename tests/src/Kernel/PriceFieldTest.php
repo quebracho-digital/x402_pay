@@ -15,14 +15,16 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\user\Entity\Role;
-use Drupal\x402_pay\CircleFacilitator;
 use Drupal\x402_pay\Event\DeliveryEvent;
 use Drupal\x402_pay\Event\PriceEvent;
-use Quebracho\X402\PaymentHeaders;
+use Drupal\x402_pay\Facilitators;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
-use Quebracho\X402\Signer;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Quebracho\X402\EvmExact;
+use Quebracho\X402\Facilitator\Facilitator;
+use Quebracho\X402\PaymentHeaders;
+use Quebracho\X402\Signer;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -324,13 +326,13 @@ final class PriceFieldTest extends KernelTestBase {
    */
   public function testTheSellerCanBeAnAddressAlone(): void {
     $cold = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
-    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator = $this->createMock(Facilitator::class);
     $facilitator->expects($this->once())->method('verify')
-      ->with($this->anything(), $this->callback(fn($r) => $r['payTo'] === $cold), NULL)
+      ->with($this->anything(), $this->callback(fn($r) => $r['payTo'] === $cold))
       ->willReturn(['isValid' => TRUE, 'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66']);
     $settled = ['success' => TRUE, 'transaction' => self::TX, 'network' => 'eip155:5042002'];
     $facilitator->method('settle')->willReturn($settled);
-    $this->container->set('x402_pay.facilitator', $facilitator);
+    $this->useFacilitator($facilitator);
     $this->listen(fn(PriceEvent $e) => $e->setPayTo(strtolower($cold)));
 
     $required = $this->required('/x402/entity_test/1');
@@ -448,13 +450,13 @@ final class PriceFieldTest extends KernelTestBase {
    * Failed deliveries are not charged.
    */
   public function testFailedDeliveriesAreNotCharged(): void {
-    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator = $this->createMock(Facilitator::class);
     $facilitator->method('verify')->willReturn([
       'isValid' => TRUE,
       'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
     ]);
     $facilitator->expects($this->never())->method('settle');
-    $this->container->set('x402_pay.facilitator', $facilitator);
+    $this->useFacilitator($facilitator);
     $this->container->get('event_dispatcher')->addListener(DeliveryEvent::class, fn(DeliveryEvent $e) => $e->setResponse(new JsonResponse(['error' => 'seller down'], 502)));
 
     $response = $this->get('/x402/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment(X402PriceItem::find($this->entity)->requirements())]);
@@ -640,7 +642,7 @@ final class PriceFieldTest extends KernelTestBase {
    * A facilitator that verifies and settles every payment.
    */
   private function mockFacilitator(): void {
-    $facilitator = $this->createMock(CircleFacilitator::class);
+    $facilitator = $this->createMock(Facilitator::class);
     $facilitator->method('verify')->willReturn([
       'isValid' => TRUE,
       'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
@@ -651,14 +653,28 @@ final class PriceFieldTest extends KernelTestBase {
       'network' => 'eip155:5042002',
       'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
     ]);
-    $this->container->set('x402_pay.facilitator', $facilitator);
+    $this->useFacilitator($facilitator);
   }
 
   /**
    * A PAYMENT-SIGNATURE header for the accepted requirements.
    */
   private function payment(array $accepted): string {
-    return PaymentHeaders::encode(['x402Version' => 2, 'accepted' => $accepted, 'payload' => []]);
+    // Signed for real: the library checks the signature and the terms
+    // offline before the facilitator is asked anything.
+    // Anvil's third test account.
+    $buyer = new EvmExact(new Signer('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'));
+    $required = ['resource' => ['url' => 'https://example.com/'], 'accepts' => [$accepted]];
+    return PaymentHeaders::encode($buyer->pay($required, $accepted));
+  }
+
+  /**
+   * Makes the site settle through a facilitator we control.
+   */
+  private function useFacilitator(Facilitator $facilitator): void {
+    $facilitators = $this->createMock(Facilitators::class);
+    $facilitators->method('for')->willReturn($facilitator);
+    $this->container->set('x402_pay.facilitators', $facilitators);
   }
 
   /**

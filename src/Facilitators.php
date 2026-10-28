@@ -25,7 +25,7 @@ use Quebracho\X402\Signer;
  * The protocol clients (Circle, any x402 facilitator by URL, our own on
  * chain) live in the library. Here only what is Drupal's: which of them a
  * network uses, where its keys come from (Key module), and the lock that
- * serialises our gas wallet.
+ * serializes our gas wallet.
  */
 class Facilitators {
 

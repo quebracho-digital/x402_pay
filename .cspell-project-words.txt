@@ -1,4 +1,5 @@
 amazonbot
+anvil
 applebot
 blockhash
 bytespider
@@ -7,7 +8,9 @@ caroot
 checksummed
 checksumming
 devnet
+duplicate
 externalagent
+facilitators
 keccak
 keypair
 kornrunner
@@ -15,9 +18,12 @@ licence
 markdownify
 mdanter
 microlamport
+ñandú
 ombú
 ombú's
 plusinf
+psr
+quebracho
 secp
 secretkey
 shortvec
@@ -26,8 +32,8 @@ solscan
 svm
 sweepable
 términos
+unsigned
 viem
 viem's
 xbuyer
 xhtml
-ñandú

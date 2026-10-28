@@ -4,11 +4,14 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 
 - **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per request; unpaid requests get a 402 with the payment
   requirements; verify and settle **only on a 2xx response**; a payment log
-  (route, amount, payer, tx hash).
+  (route, amount, payer, tx hash). The protocol itself (402, signatures,
+  claiming a payment once, settling, headers) is the MIT library
+  [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
+  (`Quebracho\X402\X402Middleware`); the gate is what Drupal adds around it.
 - **Facilitators** (`/admin/config/services/x402`), per network:
   - **Circle's**: the keyless trial (each sale signed by the seller key) or a
     Circle API key (sellers can be bare addresses).
-  - **Our own** (`ChainFacilitator`): the site sends the buyer's signed
+  - **Our own** (the library's `ChainFacilitator`): the site sends the buyer's signed
     `transferWithAuthorization` from a gas wallet that pays only the gas
     (~87k gas: about 0.002 USDC on Arc mainnet). The token checks the
     signature, balance, time window and nonce; the site checks seller and
@@ -119,23 +122,27 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 - **Coming:** `x402_pay_commerce`, a Drupal Commerce payment gateway on top
   of it, so a person can check out in USDC.
 
-- **The buyer** (`Drupal\x402_pay\Buyer`): the other side, for a site or
-  a script that buys from agents. It reads the 402, lets a callback refuse
-  the price (a budget), signs one EIP-3009 transfer and asks again, paid.
-  With a Solana key (`SolanaKey`) it pays the 402's Solana offer instead:
-  one USDC transfer to the seller's token account, the fees left to the
-  facilitator's fee payer (`Solana`, the layout the `exact` scheme's
-  facilitators check). From the command line: `BUYER_PRIVATE_KEY=0x… drush
+- **The buyer** (the library's `PayingHttpClient`): the other side, for a
+  site or a script that buys from agents. It reads the 402, refuses what
+  goes over its `Budget`, signs one EIP-3009 transfer and asks again, paid.
+  With a Solana key (`SolanaKey`) it pays the 402's Solana offer instead.
+  From the command line: `BUYER_PRIVATE_KEY=0x… drush
   x402:buy <url> [--input='{"q": 1}'] [--max=0.05]`; a Solana key (base58,
   or solana-keygen's JSON array) in the same variable pays on Solana.
 
-**No Node.js, no npm.** Everything is signed in PHP (`Signer`, `Eip712`, on
-`kornrunner/keccak` and `kornrunner/secp256k1`; Solana's ed25519 with
-sodium), and the tests check it
-against vectors that viem produced once (`tests/fixtures/`), byte for byte.
-The Node scripts this module started with (a viem buyer and the vector
-generator) are gone, by rule: no dependency tree we did not read gets near
-a wallet key. See [Ombú's README](https://github.com/quebracho-digital/ombu#no-nodejs-on-purpose).
+**No Node.js, no npm.** Everything is signed in PHP, by the library
+(`Signer`, `Eip712`, on `kornrunner/keccak` and `kornrunner/secp256k1`;
+Solana's ed25519 with sodium), and its tests check it against vectors that
+viem produced once, byte for byte. The Node scripts this module started
+with (a viem buyer and the vector generator) are gone, by rule: no
+dependency tree we did not read gets near a wallet key. See
+[Ombú's README](https://github.com/quebracho-digital/ombu#no-nodejs-on-purpose).
+
+The library is a path repository in `composer.json` for now
+(`../quebracho-x402-mcp/packages/x402`) until it is on Packagist. It ships
+testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
+Where the library lacks something this module uses, it is written down in
+[LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md).
 
 Arc mainnet (`eip155:5042`) and testnet (`eip155:5042002`). Wallet keys and
 API keys go through the `key` module from an environment variable, never in
