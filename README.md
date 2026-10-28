@@ -154,5 +154,5 @@ What was chosen, what was not and why: [DECISIONS.md](DECISIONS.md).
 
 ## Licence
 
-`Apache-2.0 OR GPL-2.0-or-later`, at your choice: [LICENSE-APACHE](LICENSE-APACHE),
-[LICENSE-GPL](LICENSE-GPL).
+`GPL-2.0-or-later`: [LICENSE.txt](LICENSE.txt). It depends on the MIT-licensed
+[`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp), which a GPL module may include.

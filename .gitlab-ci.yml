@@ -19,8 +19,6 @@ variables:
   # MarkdownifyTest skips itself where Markdownify cannot be installed.
   _LENIENT_ALLOW_LIST: markdownify
   SKIP_ESLINT: 1
-  # Dual licence: the template only skips LICENSE.txt.
-  _CSPELL_IGNORE_PATHS: LICENSE-GPL, LICENSE-APACHE
 
 # The drupal.org images have no gmp, which the secp256k1 and keccak
 # libraries need (signatures). Their PHP is built in /usr/local (apt's

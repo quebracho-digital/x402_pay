@@ -47,8 +47,8 @@ wallet, the sweeper's cron.
   and the code is written as if the fix existed. **It does not run until
   the library has what that file lists** (Solana, the facilitator
   clients, a few hooks in the middleware).
-- **Kept the licences apart:** the module stays GPL-2.0-or-later and
-  includes MIT code, which is allowed; the library copies nothing from
+- **Kept the licences apart:** the module is GPL-2.0-or-later only and
+  depends on MIT code, which is allowed; the library copies nothing from
   here any more.
 - **Rejected:** keeping our own `PaymentGate` flow beside the library's
   middleware "for now". It is the thing most worth sharing, and the
