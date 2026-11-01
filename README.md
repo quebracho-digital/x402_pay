@@ -143,6 +143,20 @@ testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
 Where the library lacks something this module uses, it is written down in
 [LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md).
 
+**Code written for 1.0.0-beta2 keeps working, deprecated.** The classes the
+library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an
+`E_USER_DEPRECATED` when loaded:
+
+| Old class | Use instead |
+|---|---|
+| `Signer`, `Eip712`, `PaymentHeaders`, `Transfer`, `SolanaKey`, `Rpc`, `SellerProof`, `Solana`, `InvalidPaymentException`, `FacilitatorException` | The same name in `Quebracho\X402` (the old name is an alias of it) |
+| `Networks` | `Quebracho\X402\Networks::find($network)` in place of `Networks::ALL[$network]` |
+| `Buyer` | `Quebracho\X402\PayingHttpClient` with a `Budget` |
+| `CircleFacilitator`, `RemoteFacilitator`, `ChainFacilitator` and their services | The `x402_pay.facilitators` service |
+
+`Solana::pay()` is gone: `Quebracho\X402\SolanaExact::pay()` builds the
+payment, and `Buyer::pay()` still buys a whole call.
+
 Arc mainnet (`eip155:5042`) and testnet (`eip155:5042002`). Wallet keys and
 API keys go through the `key` module from an environment variable, never in
 exportable config.

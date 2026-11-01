@@ -148,3 +148,22 @@ each of its routes (`MarkdownifyTest`).
 
 Earlier decisions are in the README (what it does and why) and in git
 history. New ones go here.
+
+### The old PHP API stays, deprecated, as a wrapper of the library
+
+Decidido por Leo (2026-11-01): "podrias dejar las apis viejas de x402_pay
+como deprecadas y que solo sirvan de wraper a la libreria php?".
+The classes the refactor removed (`Signer`, `Networks`, `PaymentHeaders`,
+`Eip712`, `Solana`, `Buyer`, `CircleFacilitator`, ...) come back in
+`Drupal\x402_pay` marked `@deprecated`, delegating to `quebracho/x402`, so
+code written against 1.0.0-beta2 (Ombú) keeps working.
+
+How (2026-11-01): the classes that are the library's own under another name
+are `class_alias`es; `Networks` keeps its 1.0.0-beta2 `ALL` (a constant
+cannot ask the library, and Ombú reads `ALL[$network]['explorer']`); `Buyer`
+and the three facilitators keep their calls and delegate to `EvmExact`,
+`SolanaExact`, `HttpFacilitator` and the `x402_pay.facilitators` service.
+`Solana::pay()` is not kept: nothing calls it but `Buyer`, which is kept.
+The deprecation reads "in x402_pay:1.0.0-beta3, removed from
+x402_pay:2.0.0", chosen by Claude Code as the next release and the next
+major; Leo did not pick the numbers.

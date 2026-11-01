@@ -14,6 +14,22 @@ services:
   x402_pay.facilitators:
     class: Drupal\x402_pay\Facilitators
     arguments: ['@http_client', '@x402_pay.psr17', '@config.factory', '@key.repository', '@lock', '@cache.default']
+  # Deprecated in 1.0.0-beta3, removed in 2.0.0: use x402_pay.facilitators.
+  x402_pay.facilitator:
+    class: Drupal\x402_pay\CircleFacilitator
+    autowire: false
+    arguments: ['@http_client', 'https://api.circle.com/v1/facilitator/x402', 1, 5, '@config.factory', '@key.repository']
+    deprecated: The "%service_id%" service is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use x402_pay.facilitators instead. See https://www.drupal.org/project/x402_pay
+  x402_pay.chain_facilitator:
+    class: Drupal\x402_pay\ChainFacilitator
+    autowire: false
+    arguments: ['@http_client', '@config.factory', '@key.repository', '@lock']
+    deprecated: The "%service_id%" service is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use x402_pay.facilitators instead. See https://www.drupal.org/project/x402_pay
+  x402_pay.remote_facilitator:
+    class: Drupal\x402_pay\RemoteFacilitator
+    autowire: false
+    arguments: ['@http_client', '@config.factory', '@key.repository', '@cache.default']
+    deprecated: The "%service_id%" service is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use x402_pay.facilitators instead. See https://www.drupal.org/project/x402_pay
   x402_pay.claims:
     class: Drupal\x402_pay\ClaimStore
     arguments: ['@database', '@datetime.time']
