@@ -10,10 +10,9 @@ use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Psr\Http\Client\ClientInterface;
-use Quebracho\X402\Facilitator\ChainFacilitator;
-use Quebracho\X402\Facilitator\CircleFacilitator;
-use Quebracho\X402\Facilitator\Facilitator;
-use Quebracho\X402\Facilitator\HttpFacilitator;
+use Quebracho\X402\ChainFacilitator;
+use Quebracho\X402\Facilitator;
+use Quebracho\X402\HttpFacilitator;
 use Quebracho\X402\FacilitatorException;
 use Quebracho\X402\Networks;
 use Quebracho\X402\Rpc;
@@ -28,9 +27,6 @@ use Quebracho\X402\Signer;
  * serializes our gas wallet.
  */
 class Facilitators {
-  // LIBRARY-FEEDBACK G7: the Facilitator interface and its three clients
-  // (HttpFacilitator, CircleFacilitator, ChainFacilitator) do not exist yet.
-
 
   /**
    * How long /supported is trusted, in seconds.
@@ -78,14 +74,15 @@ class Facilitators {
     if ($this->settlesItself($network)) {
       return new ChainFacilitator(
         rpc: new Rpc($this->httpClient, $this->psr17, $this->psr17, Networks::get($network)['rpc']),
-        gasWallet: $this->gasWallet(),
+        gas: $this->gasWallet(),
+        network: $network,
         serialize: $this->serialize(...),
       );
     }
     if ($site = $this->remote($network)) {
       return $this->http($site);
     }
-    return new CircleFacilitator($this->httpClient, $this->psr17, $this->psr17, apiKey: $this->circleKey(), seller: $seller);
+    return $this->http(['url' => HttpFacilitator::CIRCLE], $this->circleKey(), $seller);
   }
 
   /**
@@ -107,9 +104,17 @@ class Facilitators {
 
   /**
    * A facilitator by URL, with its bearer token if the site set one.
+   *
+   * @throws \Quebracho\X402\FacilitatorException
+   *   Not an https URL.
    */
-  private function http(array $site): HttpFacilitator {
-    return new HttpFacilitator($this->httpClient, $this->psr17, $this->psr17, $site['url'], $this->secret($site['key_id'] ?? ''));
+  private function http(array $site, ?string $bearer = NULL, ?Signer $seller = NULL): HttpFacilitator {
+    try {
+      return new HttpFacilitator($this->httpClient, $this->psr17, $this->psr17, $site['url'], $bearer ?? $this->secret($site['key_id'] ?? ''), $seller);
+    }
+    catch (\InvalidArgumentException $e) {
+      throw new FacilitatorException($e->getMessage(), 0, $e);
+    }
   }
 
   /**

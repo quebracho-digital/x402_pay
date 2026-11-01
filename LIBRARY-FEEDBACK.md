@@ -28,6 +28,12 @@ whole of `Eip712`, `Signer`, `Transfer`, `PaymentHeaders`, `Networks` and
 
 ### G7. Facilitator clients are missing (Blocker)
 
+**Resolved in v0.2.0**, with a different shape: the namespace is flat
+(`Quebracho\X402\Facilitator`, `HttpFacilitator`, `ChainFacilitator`),
+and Circle is `HttpFacilitator` at `HttpFacilitator::CIRCLE` with the
+`$bearer` API key or the `$seller` key. `ChainFacilitator` also takes its
+`$network`. The module was ported on 2026-11-01.
+
 The library only has a `$settle` closure. The module had three clients, all
 protocol, none Drupal: Circle's (with the EIP-712 seller proof and
 `/status` polling), any x402 facilitator by URL (`/verify`, `/settle`,

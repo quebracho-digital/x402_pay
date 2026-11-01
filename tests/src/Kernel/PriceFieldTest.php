@@ -22,7 +22,7 @@ use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Quebracho\X402\EvmExact;
-use Quebracho\X402\Facilitator\Facilitator;
+use Quebracho\X402\Facilitator;
 use Quebracho\X402\PaymentHeaders;
 use Quebracho\X402\Signer;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -67,7 +67,7 @@ final class PriceFieldTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('user');
-    $this->installSchema('x402_pay', ['x402_pay_log']);
+    $this->installSchema('x402_pay', ['x402_pay_log', 'x402_pay_claim']);
     $this->installConfig(['system', 'x402_pay']);
     Role::create(['id' => AccountInterface::ANONYMOUS_ROLE, 'label' => 'Anonymous'])
       ->grantPermission('view test entity')

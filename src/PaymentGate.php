@@ -186,7 +186,7 @@ class PaymentGate {
     $middleware = new X402Middleware(
       schemes: [new EvmExact(), new SolanaExact()],
       price: fn() => [$requirements],
-      claim: $this->claims,
+      claim: $this->claims->__invoke(...),
       responses: $this->psr17,
       streams: $this->psr17,
       settle: $settle,
