@@ -167,3 +167,5 @@ and the three facilitators keep their calls and delegate to `EvmExact`,
 The deprecation reads "in x402_pay:1.0.0-beta3, removed from
 x402_pay:2.0.0", chosen by Claude Code as the next release and the next
 major; Leo did not pick the numbers.
+
+Decidido por Leo (2026-11-01 14:50): "Sí, avanzá 1.0.x", answering whether the public `1.0.x` branch on drupal.org moves to the refactor. Ombú's production installs `1.0.x-dev` from drupal.org, so the refactor reaches it only through that branch. `1.0.x` fast-forwards to `refactor/use-quebracho-x402`; code written against 1.0.0-beta2 keeps working through the deprecated wrappers.
