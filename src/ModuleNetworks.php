@@ -38,7 +38,6 @@ final class ModuleNetworks {
       rpc: 'https://rpc.mainnet.arc.io',
       explorer: 'https://explorer.arc.io/tx/',
     );
-    // LIBRARY-FEEDBACK G1: there is no way to add a non-EVM network.
     // cspell:disable-next-line
     Networks::addSolana(
       // cspell:disable-next-line

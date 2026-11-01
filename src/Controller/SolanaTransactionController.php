@@ -61,7 +61,6 @@ final class SolanaTransactionController implements ContainerInjectionInterface {
       return new JsonResponse(['error' => 'Not a Solana payment this site asks for.'], 400);
     }
     try {
-      // LIBRARY-FEEDBACK G6: an unsigned transaction for a browser wallet.
       $rpc = new Rpc($this->httpClient, $this->psr17, $this->psr17, $network['rpc']);
       return new JsonResponse(['transaction' => (new SolanaExact(rpc: $rpc))->unsignedTransaction($req, $buyer)]);
     }

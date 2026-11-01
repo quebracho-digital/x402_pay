@@ -116,7 +116,6 @@ class Delivery {
     $requirements = Networks::requirements($quote->network() ?? (string) $item->getFieldDefinition()->getSetting('network'), $quote->price(), $quote->payTo() ?? $item->payTo(), $quote->timeout());
     if ($quote->settlesFirst()) {
       // Announced: a client must know its money moves before the delivery.
-      // LIBRARY-FEEDBACK G4: the middleware should honour this flow.
       $requirements['extra']['paymentFlow'] = 'upfront';
     }
     return $requirements;

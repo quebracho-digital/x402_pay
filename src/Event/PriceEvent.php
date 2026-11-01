@@ -127,8 +127,8 @@ final class PriceEvent extends Event {
   /**
    * The seller's address alone, when not the field's.
    *
-   * A wallet whose key is not on this site. Needs a Circle API key (see
-   * CircleFacilitator).
+   * A wallet whose key is not on this site. Needs a Circle API key (the
+   * keyless trial signs each sale with the seller key).
    */
   public function setPayTo(string $address): void {
     // Base58 (Solana) is kept as is; checksumming is EVM's.

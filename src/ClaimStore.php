@@ -16,8 +16,6 @@ use Drupal\Core\Database\Connection;
  * Drupal lock only held while one request ran.
  */
 class ClaimStore {
-  // LIBRARY-FEEDBACK G8: the library only knows claim(), not release().
-
 
   /**
    * How long a claim is kept, in seconds.

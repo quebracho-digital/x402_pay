@@ -7,6 +7,28 @@ The module was rewritten as if each gap below were already closed, so the
 code says what it wants. Each code comment `LIBRARY-FEEDBACK Gn` points
 here. Nothing was run: no composer, no network, no facilitator.
 
+## Status against v0.2.0 (2026-11-01)
+
+The module now runs on `quebracho/x402` v0.2.0 from Packagist, and its
+Unit, Kernel and Functional tests pass. The gaps below are kept as written
+on 2026-10-28; this is where each one stands:
+
+| Gap | Status in v0.2.0 |
+|---|---|
+| G1 `Networks` catalogue | Resolved: `Networks::add()`, `addSolana()`, `find()` |
+| G2 the 402's `resource` | Resolved: `X402Middleware` `$resource` |
+| G3 online verify | Resolved: `X402Middleware` `$verify` |
+| G4 `upfront` flow | Resolved: `extra.paymentFlow = upfront` settles before the handler |
+| G5 a throwing `$settle` | Resolved: a `FacilitatorException` answers 502 |
+| G6 Solana | Resolved: `SolanaExact` (with `unsignedTransaction()`), `SolanaKey` |
+| G7 facilitator clients | Resolved, flat namespace: `Facilitator`, `HttpFacilitator` (Circle is `HttpFacilitator::CIRCLE`), `ChainFacilitator` (takes its `$network`) |
+| G8 claim release | Resolved: `X402Middleware` `$release`; the claim is a `Closure` |
+| G9 paid retry timeout | **Open**: `PayingHttpClient` has no timeout; `drush x402:buy` sets it on the Guzzle client |
+| G10 outcome hook | Resolved: `PaymentOutcome` event |
+| G11 EVM helpers | Resolved: `Rpc::number()`, `Rpc::word()` |
+| G12 PSR-7 only | **Open**: the gate still converts through the Symfony bridge |
+| G13 distribution | Resolved: on Packagist, required as `^0.2` |
+
 Severity: **Blocker** (the module cannot work without it), **High** (works
 but loses a feature or safety the module had), **Medium** (workaround in
 the module, fragile), **Low** (comfort).
@@ -27,12 +49,6 @@ whole of `Eip712`, `Signer`, `Transfer`, `PaymentHeaders`, `Networks` and
 ## Gaps
 
 ### G7. Facilitator clients are missing (Blocker)
-
-**Resolved in v0.2.0**, with a different shape: the namespace is flat
-(`Quebracho\X402\Facilitator`, `HttpFacilitator`, `ChainFacilitator`),
-and Circle is `HttpFacilitator` at `HttpFacilitator::CIRCLE` with the
-`$bearer` API key or the `$seller` key. `ChainFacilitator` also takes its
-`$network`. The module was ported on 2026-11-01.
 
 The library only has a `$settle` closure. The module had three clients, all
 protocol, none Drupal: Circle's (with the EIP-712 seller proof and
@@ -285,7 +301,7 @@ ways: GPL then MIT).
 - `Budget::MAX_TIMEOUT = 600` is a good floor for the buyer; the module's
   seller accepts any `setTimeout()` the site builder writes.
 
-## Not verified (everything above is from reading)
+## Not verified on 2026-10-28 (superseded by the status above)
 
 Nothing ran: no `composer install`, no PHPUnit, no phpcs against a real
 Drupal beyond the Drupal/DrupalPractice standard on the module's own files

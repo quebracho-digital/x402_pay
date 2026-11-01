@@ -101,7 +101,6 @@ class PaymentGate {
 
     // What the chain alone knows (balance, a spent nonce) is the
     // facilitator's to say; the signature and the terms the library checked.
-    // LIBRARY-FEEDBACK G3: X402Middleware has no online verify step.
     $verify = function (array $payment, array $req) use ($facilitator, $timed, $run): ?string {
       try {
         $verified = $timed('verify', fn() => $facilitator->verify($payment, $req));
@@ -119,8 +118,7 @@ class PaymentGate {
         $receipt = $timed('settle', fn() => $facilitator->settle($payment, $req));
       }
       catch (FacilitatorException $e) {
-        // LIBRARY-FEEDBACK G5: a throwing $settle becomes a plain 402 with
-        // 'unexpected_settle_error'; we tell the buyer it was not them.
+        // Recorded so the response keeps the facilitator's own message.
         $run->unavailable = $e->getMessage();
         $receipt = [
           'success' => FALSE,
@@ -191,8 +189,6 @@ class PaymentGate {
       streams: $this->psr17,
       settle: $settle,
       events: $this->eventDispatcher,
-      // LIBRARY-FEEDBACK G2, G3: the 402's `resource` with description and
-      // mimeType; an online verify between the offline one and the claim.
       resource: fn() => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
       verify: $verify,
     );
