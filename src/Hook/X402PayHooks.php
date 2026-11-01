@@ -17,6 +17,7 @@ use Drupal\field\FieldConfigInterface;
 use Drupal\x402_pay\ClaimStore;
 use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
+use Drupal\x402_pay\Reconciler;
 use Drupal\x402_pay\Sweeper;
 
 /**
@@ -29,6 +30,7 @@ class X402PayHooks {
     private readonly ClaimStore $claims,
     private readonly RouteMatchInterface $routeMatch,
     private readonly EntityFieldManagerInterface $entityFieldManager,
+    private readonly Reconciler $reconciler,
   ) {}
 
   /**
@@ -61,7 +63,7 @@ class X402PayHooks {
   }
 
   /**
-   * Sweeps the seller wallets when due, and forgets old payment claims.
+   * Sweeps, forgets old payment claims, and checks the log against the chain.
    *
    * The wallets go to the cold wallet, if sweeping is on.
    */
@@ -69,6 +71,7 @@ class X402PayHooks {
   public function cron(): void {
     $this->sweeper->cron();
     $this->claims->prune();
+    $this->reconciler->cron();
   }
 
   /**

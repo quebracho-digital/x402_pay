@@ -123,3 +123,13 @@ function x402_pay_update_10005(): void {
     $schema->createTable('x402_pay_claim', x402_pay_schema()['x402_pay_claim']);
   }
 }
+
+/**
+ * Caps the gas of one settlement on chain at 0.05 in the gas token.
+ */
+function x402_pay_update_10006(): void {
+  $config = \Drupal::configFactory()->getEditable('x402_pay.settings');
+  if ($config->get('facilitator.max_gas_cost') === NULL) {
+    $config->set('facilitator.max_gas_cost', '0.05')->save();
+  }
+}

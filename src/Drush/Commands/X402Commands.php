@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay\Drush\Commands;
 
+use Drupal\x402_pay\Reconciler;
 use Drupal\x402_pay\Sweeper;
 use Drush\Attributes as CLI;
 use Drush\Commands\AutowireTrait;
@@ -31,6 +32,8 @@ final class X402Commands extends DrushCommands {
     private readonly Sweeper $sweeper,
     #[Autowire(service: 'x402_pay.psr17')]
     private readonly HttpFactory $psr17,
+    #[Autowire(service: 'x402_pay.reconciler')]
+    private readonly Reconciler $reconciler,
   ) {
     parent::__construct();
   }
@@ -49,6 +52,21 @@ final class X402Commands extends DrushCommands {
     if (!$rows) {
       $this->logger()->success('Every seller wallet is empty.');
     }
+  }
+
+  /**
+   * Checks the payment log against the chain: pending and settled sales.
+   */
+  #[CLI\Command(name: 'x402:reconcile')]
+  #[CLI\Option(name: 'days', description: 'How far back to check settled sales.')]
+  #[CLI\Usage(name: 'drush x402:reconcile --days=8', description: 'Settles pending rows, then checks a week of sales.')]
+  public function reconcile(array $options = ['days' => 8]): void {
+    $rows = [...$this->reconciler->pending(), ...$this->reconciler->settled((int) $options['days'])];
+    foreach ($rows as $row) {
+      $this->io()->writeln(json_encode($row, JSON_UNESCAPED_SLASHES));
+    }
+    $problems = array_filter($rows, fn($row) => !empty($row['problem']));
+    $problems ? $this->logger()->error(count($problems) . ' sales disagree with the chain.') : $this->logger()->success(count($rows) . ' rows checked.');
   }
 
   /**

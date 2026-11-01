@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\x402_pay\Event\PaymentEvent;
 use GuzzleHttp\Psr7\HttpFactory;
@@ -39,6 +40,20 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PaymentGate {
 
+  /**
+   * Refused payments one visitor (IP) may send per window.
+   *
+   * Each costs us a node call. Per IP, not per payer: before verifying, the
+   * payer is whatever the request claims.
+   * ponytail: fixed numbers; a setting when a site needs other ones.
+   */
+  private const REFUSALS = 30;
+
+  /**
+   * The window of REFUSALS, in seconds.
+   */
+  private const WINDOW = 3600;
+
   public function __construct(
     private readonly Facilitators $facilitators,
     private readonly PaymentLog $log,
@@ -48,6 +63,7 @@ class PaymentGate {
     private readonly HttpFoundationFactoryInterface $foundationFactory,
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
     private readonly ?Settings $settings = NULL,
+    private readonly ?FloodInterface $flood = NULL,
   ) {}
 
   /**
@@ -68,6 +84,10 @@ class PaymentGate {
    *   Produces the paid response. Runs only after the payment verified.
    */
   public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
+    $paying = $request->headers->has(PaymentHeaders::SIGNATURE);
+    if ($paying && $this->flood && !$this->flood->isAllowed('x402_pay.refused_payment', self::REFUSALS, self::WINDOW)) {
+      return new JsonResponse(['error' => 'Too many refused payments: try again later'], 429, ['Retry-After' => (string) self::WINDOW]);
+    }
     $timings = [];
     // What happened, for the log: filled by the steps below as they run.
     $run = new \stdClass();
@@ -198,6 +218,9 @@ class PaymentGate {
       // The facilitator, not the buyer, is the problem: 502, as before.
       $response = new JsonResponse(['error' => 'Payment facilitator unavailable: ' . $run->unavailable], 502);
     }
+    if ($paying && in_array($response->getStatusCode(), [400, 402], TRUE)) {
+      $this->flood?->register('x402_pay.refused_payment', self::WINDOW);
+    }
     $this->recordRun($request, $requirements, $resource, $run);
     $steps = array_map(fn($step, $ms) => "x402-$step;dur=$ms", array_keys($timings), $timings);
     $response->headers->set('Server-Timing', implode(', ', $steps));
@@ -231,7 +254,7 @@ class PaymentGate {
     }
     elseif (!empty($settlement['success'])) {
       $failed = $run->handlerStatus !== NULL && ($run->handlerStatus < 200 || $run->handlerStatus >= 300);
-      $error = $failed ? 'delivery failed after settling: refund' : NULL;
+      $error = $failed ? Reconciler::REFUND : NULL;
       $this->record($request, ['status' => 'settled', 'error' => $error] + $entry);
     }
     elseif ($run->handlerStatus !== NULL) {

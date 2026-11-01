@@ -77,6 +77,7 @@ class Facilitators {
         gas: $this->gasWallet(),
         network: $network,
         serialize: $this->serialize(...),
+        maxGasCost: $this->maxGasCost(),
       );
     }
     if ($site = $this->remote($network)) {
@@ -131,6 +132,24 @@ class Facilitators {
     }
     finally {
       $this->lock->release($name);
+    }
+  }
+
+  /**
+   * The most one settlement's gas may cost, in wei, or NULL for no cap.
+   *
+   * Set in the gas token (USDC on Arc); every EVM gas token has 18 decimals.
+   *
+   * @throws \Quebracho\X402\FacilitatorException
+   *   Not an amount.
+   */
+  private function maxGasCost(): ?string {
+    $cap = trim((string) ($this->settings()['max_gas_cost'] ?? ''));
+    try {
+      return $cap === '' ? NULL : Networks::atomic($cap, 18);
+    }
+    catch (\InvalidArgumentException) {
+      throw new FacilitatorException("The gas cap is not an amount: $cap.");
     }
   }
 

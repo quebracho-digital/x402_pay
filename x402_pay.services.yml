@@ -37,7 +37,7 @@ services:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings']
+    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']
@@ -64,5 +64,11 @@ services:
       $keys: '@key.repository'
       $logger: '@logger.channel.x402_pay'
   Drupal\x402_pay\Sweeper: '@x402_pay.sweeper'
+  x402_pay.reconciler:
+    class: Drupal\x402_pay\Reconciler
+    arguments:
+      $httpClient: '@http_client'
+      $logger: '@logger.channel.x402_pay'
+  Drupal\x402_pay\Reconciler: '@x402_pay.reconciler'
   Drupal\x402_pay\ClaimStore: '@x402_pay.claims'
   GuzzleHttp\Psr7\HttpFactory: '@x402_pay.psr17'

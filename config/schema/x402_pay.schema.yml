@@ -23,6 +23,9 @@ x402_pay.settings:
         own_key_id:
           type: string
           label: 'Gas wallet key (Key module id)'
+        max_gas_cost:
+          type: string
+          label: 'Most gas one settlement may cost, in the gas token; empty is no cap'
         remote:
           type: sequence
           label: 'Another x402 facilitator, per network (CAIP-2 id)'

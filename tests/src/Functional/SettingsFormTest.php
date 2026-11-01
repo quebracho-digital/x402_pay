@@ -82,6 +82,8 @@ final class SettingsFormTest extends BrowserTestBase {
       'sweep[to]' => '',
     ], 'Save configuration');
     $this->assertSession()->pageTextContains('Arc (USDC) is settled by this site: leave its other facilitator empty.');
+    $this->submitForm(['facilitator[max_gas_cost]' => 'a lot', 'sweep[to]' => ''], 'Save configuration');
+    $this->assertSession()->pageTextContains('An amount above zero, with a dot, or empty.');
 
     $this->submitForm([
       'facilitator[auth]' => 'api_key',
@@ -94,6 +96,7 @@ final class SettingsFormTest extends BrowserTestBase {
       'sweep[to]' => strtolower(self::COLD),
       'sweep[keys][seller]' => TRUE,
       'sweep[min]' => '0.5',
+      'facilitator[max_gas_cost]' => '0.02',
     ], 'Save configuration');
     $this->assertSession()->pageTextContains('The configuration options have been saved.');
     $config = $this->config('x402_pay.settings');
@@ -102,6 +105,7 @@ final class SettingsFormTest extends BrowserTestBase {
       'api_key_id' => 'circle',
       'own_networks' => ['eip155:5042'],
       'own_key_id' => 'seller',
+      'max_gas_cost' => '0.02',
       'remote' => [
         'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' => ['url' => 'https://x402.org/facilitator', 'key_id' => ''],
       ],

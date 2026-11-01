@@ -89,6 +89,13 @@ final class SettingsForm extends ConfigFormBase {
         '#empty_option' => $this->t('- Choose a key -'),
         '#default_value' => $config->get('facilitator.own_key_id'),
       ],
+      'max_gas_cost' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Most gas per sale'),
+        '#description' => $this->t('In the gas token (USDC on Arc). A buyer can make our transaction revert and burn its gas; a sale whose gas would cost more is refused. Empty: no cap.'),
+        '#size' => 10,
+        '#default_value' => $config->get('facilitator.max_gas_cost') ?? '',
+      ],
       'remote' => [
         '#type' => 'details',
         '#title' => $this->t('Another facilitator, per network'),
@@ -172,6 +179,14 @@ final class SettingsForm extends ConfigFormBase {
     if (array_filter($facilitator['own_networks']) && !$facilitator['own_key_id']) {
       $form_state->setErrorByName('facilitator][own_key_id', $this->t('Settling on chain needs a gas wallet.'));
     }
+    if (trim((string) $facilitator['max_gas_cost']) !== '') {
+      try {
+        Networks::atomic(trim((string) $facilitator['max_gas_cost']), 18);
+      }
+      catch (\InvalidArgumentException) {
+        $form_state->setErrorByName('facilitator][max_gas_cost', $this->t('An amount above zero, with a dot, or empty.'));
+      }
+    }
     foreach (array_filter($facilitator['own_networks']) as $network) {
       if (trim((string) $facilitator['remote'][$network]['url']) !== '') {
         $form_state->setErrorByName("facilitator][remote][$network][url", $this->t('%network is settled by this site: leave its other facilitator empty.', ['%network' => Networks::all()[$network]['label']]));
@@ -218,6 +233,7 @@ final class SettingsForm extends ConfigFormBase {
         'api_key_id' => $facilitator['auth'] === 'api_key' ? (string) $facilitator['api_key_id'] : '',
         'own_networks' => array_values(array_filter($facilitator['own_networks'])),
         'own_key_id' => (string) $facilitator['own_key_id'],
+        'max_gas_cost' => trim((string) $facilitator['max_gas_cost']),
         'remote' => array_map(
           fn($site) => ['url' => trim((string) $site['url']), 'key_id' => (string) $site['key_id']],
           array_filter($facilitator['remote'], fn($site) => trim((string) $site['url']) !== ''),
