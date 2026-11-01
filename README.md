@@ -138,8 +138,7 @@ with (a viem buyer and the vector generator) are gone, by rule: no
 dependency tree we did not read gets near a wallet key. See
 [Ombú's README](https://github.com/quebracho-digital/ombu#no-nodejs-on-purpose).
 
-The library is a path repository in `composer.json` for now
-(`../quebracho-x402-mcp/packages/x402`) until it is on Packagist. It ships
+The library comes from Packagist (`quebracho/x402` `^0.2`). It ships
 testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
 Where the library lacks something this module uses, it is written down in
 [LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md).
