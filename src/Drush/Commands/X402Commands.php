@@ -93,7 +93,7 @@ final class X402Commands extends DrushCommands {
     $paid = NULL;
     // The paid retry waits as long as the payment can settle: a buyer that
     // hangs up first may be charged for an answer it never reads.
-    // LIBRARY-FEEDBACK G9: PayingHttpClient has no timeout of its own.
+    // The library's PayingHttpClient has no timeout of its own.
     $buyer = new PayingHttpClient(new Client(['timeout' => 120]), $schemes, $budget, function (array $req, array $receipt) use (&$paid) {
       $paid = [$req, $receipt];
       $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));

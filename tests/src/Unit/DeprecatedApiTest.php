@@ -72,8 +72,11 @@ final class DeprecatedApiTest extends UnitTestCase {
    */
   public function testNetworksKeepsItsList(): void {
     $this->expectUserDeprecationMessage('Drupal\x402_pay\Networks is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\Networks instead. See https://www.drupal.org/project/x402_pay');
+    // @phpstan-ignore classConstant.deprecatedClass
     $this->assertSame('https://explorer.arc.io/tx/', Networks::ALL['eip155:5042']['explorer']);
+    // @phpstan-ignore staticMethod.deprecatedClass
     $this->assertSame(LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'), Networks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'));
+    // @phpstan-ignore staticMethod.deprecatedClass
     $this->assertSame('10000', Networks::atomic('0.01', 6));
   }
 
@@ -92,6 +95,7 @@ final class DeprecatedApiTest extends UnitTestCase {
     ], $history);
 
     $approved = NULL;
+    // @phpstan-ignore method.deprecatedClass, method.deprecatedClass, new.deprecatedClass
     $result = (new Buyer($client, new Signer(self::BUYER)))->pay('https://example.com/a', NULL, function (array $offer) use (&$approved) {
       $approved = $offer;
     });
@@ -119,9 +123,11 @@ final class DeprecatedApiTest extends UnitTestCase {
     $client = $this->client([new Response(200, ['Content-Type' => 'application/json'], '{"isValid":true,"payer":"0xabc"}')], $history);
     $req = LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
 
+    // @phpstan-ignore method.deprecatedClass, method.deprecatedClass, new.deprecatedClass
     $answer = (new CircleFacilitator($client))->verify(['x402Version' => 2], $req, new Signer(self::BUYER));
 
     $this->assertTrue($answer['isValid']);
+    // @phpstan-ignore classConstant.deprecatedClass
     $this->assertSame(CircleFacilitator::BASE . '/verify', (string) $history[0]['request']->getUri());
   }
 
@@ -142,13 +148,19 @@ final class DeprecatedApiTest extends UnitTestCase {
     \Drupal::setContainer($container);
     $args = [new Client(), $this->getConfigFactoryStub(), $this->createMock('Drupal\key\KeyRepositoryInterface')];
 
+    // @phpstan-ignore method.deprecatedClass, new.deprecatedClass
     $chain = new ChainFacilitator(...[...$args, $this->createMock('Drupal\Core\Lock\LockBackendInterface')]);
+    // @phpstan-ignore method.deprecatedClass
     $this->assertTrue($chain->handles('eip155:5042002'));
+    // @phpstan-ignore method.deprecatedClass
     $this->assertTrue($chain->settle([], $req)['success']);
 
+    // @phpstan-ignore method.deprecatedClass, new.deprecatedClass
     $remote = new RemoteFacilitator(...[...$args, $this->createMock('Drupal\Core\Cache\CacheBackendInterface')]);
+    // @phpstan-ignore method.deprecatedClass
     $this->assertFalse($remote->handles('eip155:5042002'));
     $this->expectException('Quebracho\X402\FacilitatorException');
+    // @phpstan-ignore method.deprecatedClass
     $remote->verify([], $req);
   }
 

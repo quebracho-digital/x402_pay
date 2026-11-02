@@ -9,10 +9,11 @@ use Quebracho\X402\Networks;
 /**
  * The mainnets this module sells on, added to the library's testnets.
  *
- * The library, quebracho/x402, never moves real money by default: it ships testnets only
- * and leaves a mainnet to the caller (Networks::add, "whether the chain is a
- * testnet is the caller's responsibility"). A site that sells for real opts
- * in by installing this module, so the choice is made here, once.
+ * The library, quebracho/x402, never moves real money by default: it ships
+ * testnets only and leaves a mainnet to the caller (Networks::add, "whether
+ * the chain is a testnet is the caller's responsibility"). A site that sells
+ * for real opts in by installing this module, so the choice is made here,
+ * once.
  */
 final class ModuleNetworks {
 

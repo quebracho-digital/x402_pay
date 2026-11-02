@@ -15,9 +15,12 @@ keccak
 keypair
 kornrunner
 licence
+licences
+mainnets
 markdownify
 mdanter
 microlamport
+micropayments
 ñandú
 ombú
 ombú's

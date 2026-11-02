@@ -38,15 +38,14 @@ config entities and the settings form, permissions, the payment log and
 events, the page cache rules, Key module secrets, the lock around our gas
 wallet, the sweeper's cron.
 
-- **Why:** one author wrote both and the library is the hackathon's
-  deliverable (decisions/0029 of the hub); two copies of signing code is
+- **Why:** one author wrote both and the library is a
+  deliverable of Quebracho decision 0029; two copies of signing code is
   how they drift apart, and signing code is where a drift costs money.
 - **Done as a test:** the module was refactored against the library's
-  interface as it is, without patching the library. Every place the
-  interface fell short is in [LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md),
-  and the code is written as if the fix existed. **It does not run until
-  the library has what that file lists** (Solana, the facilitator
-  clients, a few hooks in the middleware).
+  interface as it was, without patching the library. Every place the
+  interface fell short (Solana, the facilitator clients, a few hooks in the
+  middleware) was reported to the library, which closed them all in
+  `quebracho/x402` 0.2. The report is in this repository's history.
 - **Kept the licences apart:** the module is GPL-2.0-or-later only and
   depends on MIT code, which is allowed; the library copies nothing from
   here any more.
@@ -151,8 +150,8 @@ history. New ones go here.
 
 ### The old PHP API stays, deprecated, as a wrapper of the library
 
-Decidido por Leo (2026-11-01): "podrias dejar las apis viejas de x402_pay
-como deprecadas y que solo sirvan de wraper a la libreria php?".
+Decided by Leo (2026-11-01), translated from his Spanish: could the old
+x402_pay APIs stay as deprecated ones that only wrap the PHP library?
 The classes the refactor removed (`Signer`, `Networks`, `PaymentHeaders`,
 `Eip712`, `Solana`, `Buyer`, `CircleFacilitator`, ...) come back in
 `Drupal\x402_pay` marked `@deprecated`, delegating to `quebracho/x402`, so
@@ -168,4 +167,8 @@ The deprecation reads "in x402_pay:1.0.0-beta3, removed from
 x402_pay:2.0.0", chosen by Claude Code as the next release and the next
 major; Leo did not pick the numbers.
 
-Decidido por Leo (2026-11-01 14:50): "Sí, avanzá 1.0.x", answering whether the public `1.0.x` branch on drupal.org moves to the refactor. Ombú's production installs `1.0.x-dev` from drupal.org, so the refactor reaches it only through that branch. `1.0.x` fast-forwards to `refactor/use-quebracho-x402`; code written against 1.0.0-beta2 keeps working through the deprecated wrappers.
+Decided by Leo (2026-11-01 14:50), answering whether the public `1.0.x`
+branch on drupal.org moves to the refactor: yes, go ahead. Ombú's production
+installs `1.0.x-dev` from drupal.org, so the refactor reaches it only through
+that branch. `1.0.x` fast-forwards to `refactor/use-quebracho-x402`; code
+written against 1.0.0-beta2 keeps working through the deprecated wrappers.

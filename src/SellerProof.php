@@ -13,4 +13,4 @@ use Quebracho\X402\SellerProof as LibrarySellerProof;
 
 @trigger_error('Drupal\x402_pay\SellerProof is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\SellerProof instead. See https://www.drupal.org/project/x402_pay', E_USER_DEPRECATED);
 
-class_alias(LibrarySellerProof::class, SellerProof::class);
+class_alias(LibrarySellerProof::class, 'Drupal\x402_pay\SellerProof');

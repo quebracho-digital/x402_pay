@@ -15,4 +15,4 @@ use Quebracho\X402\Solana as LibrarySolana;
 
 // Solana::pay() is gone: build the payment with
 // \Quebracho\X402\SolanaExact::pay(), or Buyer::pay() to buy a whole call.
-class_alias(LibrarySolana::class, Solana::class);
+class_alias(LibrarySolana::class, 'Drupal\x402_pay\Solana');

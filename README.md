@@ -2,7 +2,8 @@
 
 Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 
-- **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per request; unpaid requests get a 402 with the payment
+- **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per
+  request; unpaid requests get a 402 with the payment
   requirements; verify and settle **only on a 2xx response**; a payment log
   (route, amount, payer, tx hash). The protocol itself (402, signatures,
   claiming a payment once, settling, headers) is the MIT library
@@ -11,8 +12,9 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
 - **Facilitators** (`/admin/config/services/x402`), per network:
   - **Circle's**: the keyless trial (each sale signed by the seller key) or a
     Circle API key (sellers can be bare addresses).
-  - **Our own** (the library's `ChainFacilitator`): the site sends the buyer's signed
-    `transferWithAuthorization` from a gas wallet that pays only the gas
+  - **Our own** (the library's `ChainFacilitator`): the site sends the
+    buyer's signed `transferWithAuthorization` from a gas wallet that pays
+    only the gas
     (~87k gas: about 0.002 USDC on Arc mainnet). The token checks the
     signature, balance, time window and nonce; the site checks seller and
     price. No third party, no permission. EVM only. A sale whose gas would
@@ -71,7 +73,8 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   charged (402), anything else 404, never the HTML under a `.md` name.
   A path alias ending in `.md` is not reachable. Another
   module answers its own pages' `.md` from a request subscriber between
-  routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`. A free page names it in `<head>`
+  routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`.
+  A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
 - **With Markdownify:** not needed (it converts with the same library,
   `league/html-to-markdown`), and both can be enabled. `MarkdownifyTest` asks
@@ -114,7 +117,8 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   sale, with the entity in the request's language, the view mode, the
   request and the account. A subscriber can change the price, make it free
   or deny it, choose the seller (one wallet per entity, e.g. per listing of
-  a market) and say what the buyer gets (`mimeType`) and how long the payment stays
+  a market) and say what the buyer gets (`mimeType`) and how long the
+  payment stays
   valid (`setTimeout()`: a slow delivery needs more than the default 60 s,
   since settling comes after it). It starts at the
   field's price, free for those with *Access x402 content free*. The
@@ -149,8 +153,8 @@ dependency tree we did not read gets near a wallet key. See
 
 The library comes from Packagist (`quebracho/x402` `^0.2`). It ships
 testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
-Where the library lacks something this module uses, it is written down in
-[LIBRARY-FEEDBACK.md](LIBRARY-FEEDBACK.md).
+The gaps this module found in the library while moving onto it were reported
+upstream and are closed in `quebracho/x402` 0.2.
 
 **Code written for 1.0.0-beta2 keeps working, deprecated.** The classes the
 library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an

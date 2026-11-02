@@ -13,4 +13,4 @@ use Quebracho\X402\PaymentHeaders as LibraryPaymentHeaders;
 
 @trigger_error('Drupal\x402_pay\PaymentHeaders is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\PaymentHeaders instead. See https://www.drupal.org/project/x402_pay', E_USER_DEPRECATED);
 
-class_alias(LibraryPaymentHeaders::class, PaymentHeaders::class);
+class_alias(LibraryPaymentHeaders::class, 'Drupal\x402_pay\PaymentHeaders');

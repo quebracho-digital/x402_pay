@@ -85,7 +85,10 @@ class RemoteFacilitator {
    * The service that reads the settings.
    */
   private function facilitators(): Facilitators {
-    return \Drupal::service('x402_pay.facilitators');
+    // Deprecated shell: its 1.0.0-beta2 constructor is kept, so the service
+    // cannot be injected.
+    // @phpstan-ignore globalDrupalDependencyInjection.useDependencyInjection
+    return \Drupal::service('x402_pay.facilitators'); // phpcs:ignore DrupalPractice.Objects.GlobalDrupal.GlobalDrupal
   }
 
 }
