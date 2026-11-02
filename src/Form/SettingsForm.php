@@ -52,6 +52,13 @@ final class SettingsForm extends ConfigFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('x402_pay.settings');
+    $form['refused_payments'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Refused payments per visitor'),
+      '#description' => $this->t('How many refused payments one visitor (IP address) may send in an hour before getting a 429. Each one costs a call to the node. 0: no limit.'),
+      '#min' => 0,
+      '#default_value' => (int) ($config->get('refused_payments') ?? 30),
+    ];
     $form['facilitator'] = [
       '#type' => 'details',
       '#title' => $this->t('Facilitator'),
@@ -228,6 +235,7 @@ final class SettingsForm extends ConfigFormBase {
     $facilitator = $form_state->getValue('facilitator');
     $sweep = $form_state->getValue('sweep');
     $this->config('x402_pay.settings')
+      ->set('refused_payments', max(0, (int) $form_state->getValue('refused_payments')))
       ->set('facilitator', [
         'auth' => $facilitator['auth'],
         'api_key_id' => $facilitator['auth'] === 'api_key' ? (string) $facilitator['api_key_id'] : '',

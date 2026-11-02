@@ -84,6 +84,28 @@ final class SettlementHardeningTest extends KernelTestBase {
   }
 
   /**
+   * The limit is a setting: lower, higher or off.
+   */
+  public function testTheRefusalLimitComesFromConfig(): void {
+    $gate = $this->container->get('x402_pay.gate');
+    $req = Networks::requirements('eip155:5042002', '0.01', self::PAY_TO);
+    $refused = fn() => $gate->handle(
+      Request::create('https://example.com/a', server: ['HTTP_' . str_replace('-', '_', strtoupper(PaymentHeaders::SIGNATURE)) => 'not a payment']),
+      $req,
+      ['url' => 'https://example.com/a'],
+      NULL,
+      fn() => new HttpResponse('paid'),
+    )->getStatusCode();
+
+    $this->assertSame(30, $this->config('x402_pay.settings')->get('refused_payments'), 'The default.');
+    $this->config('x402_pay.settings')->set('refused_payments', 2)->save();
+    $this->assertSame([400, 400, 429], [$refused(), $refused(), $refused()]);
+
+    $this->config('x402_pay.settings')->set('refused_payments', 0)->save();
+    $this->assertSame(400, $refused(), 'Zero is no limit.');
+  }
+
+  /**
    * A pending settlement takes the outcome its receipt shows.
    */
   public function testPendingSettlementsFollowTheirReceipt(): void {

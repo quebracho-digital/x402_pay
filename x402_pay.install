@@ -133,3 +133,13 @@ function x402_pay_update_10006(): void {
     $config->set('facilitator.max_gas_cost', '0.05')->save();
   }
 }
+
+/**
+ * Makes the limit of refused payments per visitor a setting (30 an hour).
+ */
+function x402_pay_update_10007(): void {
+  $config = \Drupal::configFactory()->getEditable('x402_pay.settings');
+  if ($config->get('refused_payments') === NULL) {
+    $config->set('refused_payments', 30)->save();
+  }
+}

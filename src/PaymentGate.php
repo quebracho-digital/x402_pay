@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\x402_pay;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Site\Settings;
 use Drupal\x402_pay\Event\PaymentEvent;
@@ -41,16 +42,16 @@ use Symfony\Component\HttpFoundation\Response;
 class PaymentGate {
 
   /**
-   * Refused payments one visitor (IP) may send per window.
+   * The default of the refused_payments setting.
    *
-   * Each costs us a node call. Per IP, not per payer: before verifying, the
-   * payer is whatever the request claims.
-   * ponytail: fixed numbers; a setting when a site needs other ones.
+   * Refused payments one visitor (IP) may send per window. Each costs us a
+   * node call. Per IP, not per payer: before verifying, the payer is whatever
+   * the request claims.
    */
   private const REFUSALS = 30;
 
   /**
-   * The window of REFUSALS, in seconds.
+   * The window of the refused payments limit, in seconds.
    */
   private const WINDOW = 3600;
 
@@ -64,6 +65,7 @@ class PaymentGate {
     private readonly ?EventDispatcherInterface $eventDispatcher = NULL,
     private readonly ?Settings $settings = NULL,
     private readonly ?FloodInterface $flood = NULL,
+    private readonly ?ConfigFactoryInterface $configFactory = NULL,
   ) {}
 
   /**
@@ -85,7 +87,8 @@ class PaymentGate {
    */
   public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
     $paying = $request->headers->has(PaymentHeaders::SIGNATURE);
-    if ($paying && $this->flood && !$this->flood->isAllowed('x402_pay.refused_payment', self::REFUSALS, self::WINDOW)) {
+    $limit = (int) ($this->configFactory?->get('x402_pay.settings')->get('refused_payments') ?? self::REFUSALS);
+    if ($paying && $this->flood && $limit > 0 && !$this->flood->isAllowed('x402_pay.refused_payment', $limit, self::WINDOW)) {
       return new JsonResponse(['error' => 'Too many refused payments: try again later'], 429, ['Retry-After' => (string) self::WINDOW]);
     }
     $timings = [];

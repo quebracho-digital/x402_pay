@@ -20,6 +20,9 @@ facilitator:
   own_key_id: ''
   max_gas_cost: '0.05'
   remote: {}
+# Refused payments one visitor (IP) may send per hour before getting a 429.
+# Each costs a call to the node. 0 is no limit.
+refused_payments: 30
 # Keyless leaves seller keys on this server: cron moves what they collect
 # to a wallet whose key is not here. Arc only: its gas is USDC.
 sweep:

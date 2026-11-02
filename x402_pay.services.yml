@@ -37,7 +37,7 @@ services:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood']
+    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory']
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']

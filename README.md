@@ -31,8 +31,9 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   or dropped. Once a week, cron checks that each settled sale of the last
   8 days moved its amount to its payTo on chain; `drush x402:reconcile`
   does both now. EVM only, recent rows only (nodes forget old ones).
-- **Refused payments**: 30 per visitor (IP) an hour, then 429. Asking the
-  price is never limited.
+- **Refused payments**: 30 per visitor (IP) an hour by default, then 429.
+  Change it at the settings form (**Refused payments per visitor**) or in
+  `refused_payments`; 0 is no limit. Asking the price is never limited.
 - **The `x402_price` field**: add it to any fieldable entity and agents pay
   to read it. Each field is one product: a view mode at a price.
   - **Settings:** price, network and seller key; `payTo` is the key's own

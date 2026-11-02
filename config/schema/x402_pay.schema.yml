@@ -38,6 +38,9 @@ x402_pay.settings:
               key_id:
                 type: string
                 label: 'Bearer token (Key module id), if it asks for one'
+    refused_payments:
+      type: integer
+      label: 'Refused payments one visitor may send per hour; 0 is no limit'
     sweep:
       type: mapping
       label: 'Sweep seller wallets'
