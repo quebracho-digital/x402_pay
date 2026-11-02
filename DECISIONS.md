@@ -172,3 +172,10 @@ branch on drupal.org moves to the refactor: yes, go ahead. Ombú's production
 installs `1.0.x-dev` from drupal.org, so the refactor reaches it only through
 that branch. `1.0.x` fast-forwards to `refactor/use-quebracho-x402`; code
 written against 1.0.0-beta2 keeps working through the deprecated wrappers.
+
+Decided by Leo (2026-11-02), translated from his Spanish, asked whether to
+remove the deprecated classes now: no, open the issue first. They stay
+until 2.0.0; Ombú still imports them, so Ombú moves to the library's
+classes first. The issue is
+https://www.drupal.org/project/x402_pay/issues/3634901 and 1.0.0-beta3
+carries it.
