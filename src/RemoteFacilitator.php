@@ -12,7 +12,7 @@ use Quebracho\X402\Facilitator as LibraryFacilitator;
 use Quebracho\X402\FacilitatorException as LibraryFacilitatorException;
 use Quebracho\X402\Signer as LibrarySigner;
 
-@trigger_error('Drupal\x402_pay\RemoteFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use the x402_pay.facilitators service or \Quebracho\X402\HttpFacilitator instead. See https://www.drupal.org/project/x402_pay', E_USER_DEPRECATED);
+@trigger_error('Drupal\x402_pay\RemoteFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use the x402_pay.facilitators service or \Quebracho\X402\HttpFacilitator instead. See https://www.drupal.org/project/x402_pay/issues/3634901', E_USER_DEPRECATED);
 
 /**
  * Any x402 facilitator by URL, set per network, with the 1.0.0-beta2 calls.
@@ -23,7 +23,7 @@ use Quebracho\X402\Signer as LibrarySigner;
  *
  * @deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use
  *   the x402_pay.facilitators service instead.
- * @see https://www.drupal.org/project/x402_pay
+ * @see https://www.drupal.org/project/x402_pay/issues/3634901
  */
 class RemoteFacilitator {
 

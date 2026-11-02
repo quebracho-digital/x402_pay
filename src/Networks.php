@@ -6,7 +6,7 @@ namespace Drupal\x402_pay;
 
 use Quebracho\X402\Networks as LibraryNetworks;
 
-@trigger_error('Drupal\x402_pay\Networks is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\Networks instead. See https://www.drupal.org/project/x402_pay', E_USER_DEPRECATED);
+@trigger_error('Drupal\x402_pay\Networks is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\Networks instead. See https://www.drupal.org/project/x402_pay/issues/3634901', E_USER_DEPRECATED);
 
 /**
  * The chains and tokens a price can be charged in, as of 1.0.0-beta2.
@@ -15,7 +15,7 @@ use Quebracho\X402\Networks as LibraryNetworks;
  *   \Quebracho\X402\Networks instead: Networks::find($network) in place of
  *   Networks::ALL[$network]. It knows these networks once the module is
  *   loaded (ModuleNetworks).
- * @see https://www.drupal.org/project/x402_pay
+ * @see https://www.drupal.org/project/x402_pay/issues/3634901
  */
 final class Networks {
 

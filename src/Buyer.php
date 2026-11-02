@@ -15,7 +15,7 @@ use Quebracho\X402\Signer as LibrarySigner;
 use Quebracho\X402\SolanaExact;
 use Quebracho\X402\SolanaKey as LibrarySolanaKey;
 
-@trigger_error('Drupal\x402_pay\Buyer is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\PayingHttpClient instead. See https://www.drupal.org/project/x402_pay', E_USER_DEPRECATED);
+@trigger_error('Drupal\x402_pay\Buyer is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\PayingHttpClient instead. See https://www.drupal.org/project/x402_pay/issues/3634901', E_USER_DEPRECATED);
 
 /**
  * Buys an x402 call: asks, signs one transfer, asks again paid.
@@ -25,7 +25,7 @@ use Quebracho\X402\SolanaKey as LibrarySolanaKey;
  *
  * @deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use
  *   \Quebracho\X402\PayingHttpClient with a \Quebracho\X402\Budget instead.
- * @see https://www.drupal.org/project/x402_pay
+ * @see https://www.drupal.org/project/x402_pay/issues/3634901
  */
 class Buyer {
 

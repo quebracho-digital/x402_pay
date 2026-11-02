@@ -63,7 +63,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    */
   #[DataProvider('aliases')]
   public function testOldNamesAreTheLibraryClasses(string $name): void {
-    $this->expectUserDeprecationMessage("Drupal\\x402_pay\\$name is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \\Quebracho\\X402\\$name instead. See https://www.drupal.org/project/x402_pay");
+    $this->expectUserDeprecationMessage("Drupal\\x402_pay\\$name is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \\Quebracho\\X402\\$name instead. See https://www.drupal.org/project/x402_pay/issues/3634901");
     $this->assertSame("Quebracho\\X402\\$name", (new \ReflectionClass("Drupal\\x402_pay\\$name"))->getName());
   }
 
@@ -71,7 +71,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    * Networks keeps its list and delegates the rest.
    */
   public function testNetworksKeepsItsList(): void {
-    $this->expectUserDeprecationMessage('Drupal\x402_pay\Networks is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\Networks instead. See https://www.drupal.org/project/x402_pay');
+    $this->expectUserDeprecationMessage('Drupal\x402_pay\Networks is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\Networks instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
     // @phpstan-ignore classConstant.deprecatedClass
     $this->assertSame('https://explorer.arc.io/tx/', Networks::ALL['eip155:5042']['explorer']);
     // @phpstan-ignore staticMethod.deprecatedClass
@@ -84,7 +84,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    * Buyer pays a 402 with a payment the library accepts.
    */
   public function testBuyerPaysWithTheLibrary(): void {
-    $this->expectUserDeprecationMessage('Drupal\x402_pay\Buyer is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\PayingHttpClient instead. See https://www.drupal.org/project/x402_pay');
+    $this->expectUserDeprecationMessage('Drupal\x402_pay\Buyer is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\PayingHttpClient instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
     $req = LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
     $required = ['x402Version' => 2, 'resource' => ['url' => 'https://example.com/a'], 'accepts' => [$req]];
     $receipt = ['success' => TRUE, 'transaction' => '0x' . str_repeat('ab', 32), 'network' => $req['network']];
@@ -118,7 +118,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    * CircleFacilitator asks Circle through the library's HttpFacilitator.
    */
   public function testCircleFacilitatorDelegates(): void {
-    $this->expectUserDeprecationMessage('Drupal\x402_pay\CircleFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\HttpFacilitator with HttpFacilitator::CIRCLE instead. See https://www.drupal.org/project/x402_pay');
+    $this->expectUserDeprecationMessage('Drupal\x402_pay\CircleFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\HttpFacilitator with HttpFacilitator::CIRCLE instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
     $history = [];
     $client = $this->client([new Response(200, ['Content-Type' => 'application/json'], '{"isValid":true,"payer":"0xabc"}')], $history);
     $req = LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
@@ -135,7 +135,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    * The remote and chain facilitators use the x402_pay.facilitators service.
    */
   public function testRemoteAndChainFacilitatorsDelegate(): void {
-    $this->expectUserDeprecationMessage('Drupal\x402_pay\ChainFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use the x402_pay.facilitators service or \Quebracho\X402\ChainFacilitator instead. See https://www.drupal.org/project/x402_pay');
+    $this->expectUserDeprecationMessage('Drupal\x402_pay\ChainFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use the x402_pay.facilitators service or \Quebracho\X402\ChainFacilitator instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
     $req = LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
     $inner = $this->createMock(Facilitator::class);
     $inner->method('settle')->willReturn(['success' => TRUE, 'transaction' => '0x1', 'network' => $req['network']]);
