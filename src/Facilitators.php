@@ -11,6 +11,7 @@ use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Psr\Http\Client\ClientInterface;
 use Quebracho\X402\ChainFacilitator;
+use Quebracho\X402\CircleFacilitator as LibraryCircleFacilitator;
 use Quebracho\X402\Facilitator;
 use Quebracho\X402\HttpFacilitator;
 use Quebracho\X402\FacilitatorException;
@@ -83,7 +84,9 @@ class Facilitators {
     if ($site = $this->remote($network)) {
       return $this->http($site);
     }
-    return $this->http(['url' => HttpFacilitator::CIRCLE], $this->circleKey(), $seller);
+    // Circle's keyless seller proof and its /status polling are the library's
+    // CircleFacilitator; HttpFacilitator with a seller is deprecated in 0.4.
+    return new LibraryCircleFacilitator($this->httpClient, $this->psr17, $this->psr17, $this->circleKey(), $seller);
   }
 
   /**
@@ -109,9 +112,9 @@ class Facilitators {
    * @throws \Quebracho\X402\FacilitatorException
    *   Not an https URL.
    */
-  private function http(array $site, ?string $bearer = NULL, ?Signer $seller = NULL): HttpFacilitator {
+  private function http(array $site): HttpFacilitator {
     try {
-      return new HttpFacilitator($this->httpClient, $this->psr17, $this->psr17, $site['url'], $bearer ?? $this->secret($site['key_id'] ?? ''), $seller);
+      return new HttpFacilitator($this->httpClient, $this->psr17, $this->psr17, $site['url'], $this->secret($site['key_id'] ?? ''));
     }
     catch (\InvalidArgumentException $e) {
       throw new FacilitatorException($e->getMessage(), 0, $e);

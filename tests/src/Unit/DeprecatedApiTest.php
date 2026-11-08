@@ -118,7 +118,7 @@ final class DeprecatedApiTest extends UnitTestCase {
    * CircleFacilitator asks Circle through the library's HttpFacilitator.
    */
   public function testCircleFacilitatorDelegates(): void {
-    $this->expectUserDeprecationMessage('Drupal\x402_pay\CircleFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\HttpFacilitator with HttpFacilitator::CIRCLE instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
+    $this->expectUserDeprecationMessage('Drupal\x402_pay\CircleFacilitator is deprecated in x402_pay:1.0.0-beta3 and is removed from x402_pay:2.0.0. Use \Quebracho\X402\CircleFacilitator instead. See https://www.drupal.org/project/x402_pay/issues/3634901');
     $history = [];
     $client = $this->client([new Response(200, ['Content-Type' => 'application/json'], '{"isValid":true,"payer":"0xabc"}')], $history);
     $req = LibraryNetworks::requirements('eip155:5042002', '0.01', '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');

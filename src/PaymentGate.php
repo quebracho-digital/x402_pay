@@ -133,7 +133,10 @@ class PaymentGate {
         return 'facilitator_unavailable';
       }
       $run->payer = $verified['payer'] ?? NULL;
-      return empty($verified['isValid']) ? ($verified['invalidReason'] ?? 'invalid_payment') : NULL;
+      // The library reads this strictly: NULL approves, a non-empty string
+      // refuses. Anything else would be refused as unexpected_verify_error.
+      $reason = $verified['invalidReason'] ?? NULL;
+      return empty($verified['isValid']) ? (is_string($reason) && $reason !== '' ? $reason : 'invalid_payment') : NULL;
     };
 
     $settle = function (array $payment, array $req) use ($facilitator, $timed, $run): array {
