@@ -22,6 +22,8 @@ use Drupal\x402_pay\Ofac;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Reconciler;
 use Drupal\x402_pay\Sweeper;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Hooks for x402 Pay.
@@ -37,6 +39,8 @@ class X402PayHooks {
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly Reconciler $reconciler,
     private readonly Ofac $ofac,
+    #[Autowire(service: 'logger.channel.x402_pay')]
+    private readonly LoggerInterface $logger,
   ) {}
 
   /**
@@ -87,7 +91,7 @@ class X402PayHooks {
         $run();
       }
       catch (\Throwable $e) {
-        \Drupal::logger('x402_pay')->error('Cron step "@step" failed: @message', [
+        $this->logger->error('Cron step "@step" failed: @message', [
           '@step' => $step,
           '@message' => $e->getMessage(),
         ]);

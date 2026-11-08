@@ -49,7 +49,9 @@ class Reconciler {
   private const WINDOW = 8 * 86400;
 
   /**
-   * AuthorizationUsed(address,bytes32): the token's own proof of a spent authorization.
+   * The token's own proof of a spent authorization.
+   *
+   * The topic of AuthorizationUsed(address,bytes32).
    */
   private const AUTHORIZATION_USED = '0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5';
 
@@ -64,7 +66,7 @@ class Reconciler {
   public const REFUND = 'delivery failed after settling: refund';
 
   /**
-   * The error of a sale whose logged transaction failed but whose authorization is spent.
+   * The error of a failed sale whose authorization is spent.
    *
    * Not called settled: cancelling an authorization spends it too.
    */

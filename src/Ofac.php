@@ -66,7 +66,9 @@ final class Ofac {
   }
 
   /**
-   * Seconds since OFAC published the list a sale reads (negative: a future date).
+   * Seconds since OFAC published the list a sale reads.
+   *
+   * Negative for a list dated in the future.
    */
   public function age(): int {
     $published = strtotime($this->list()->published());

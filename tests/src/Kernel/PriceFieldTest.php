@@ -258,7 +258,9 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
-   * The log names the signer and a lower-case hash, whatever the facilitator says.
+   * The log names the signer and a lower-case hash.
+   *
+   * Whatever the facilitator says.
    */
   public function testTheLogKeepsWhoSignedNotWhoTheFacilitatorSays(): void {
     $facilitator = $this->createMock(Facilitator::class);
@@ -287,7 +289,7 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
-   * A settle that may have moved money is logged, and its payment stays claimed.
+   * A settle that may have moved money is logged and stays claimed.
    *
    * The facilitator can send the transaction and then time out; the buyer paid
    * and the reconciler needs a row (with the nonce) to see it.

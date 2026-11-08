@@ -196,7 +196,7 @@ final class SettlementHardeningTest extends KernelTestBase {
   }
 
   /**
-   * A reverted or lost transaction is not "unpaid" while the authorization is spent.
+   * A reverted or lost transaction is not "unpaid" while it can be spent.
    *
    * The buyer's signed authorization can be used by a transaction other than
    * the one logged (a rebroadcast with another gas price): the money moved
