@@ -37,6 +37,7 @@ svm
 sweepable
 términos
 unsigned
+updatedb
 viem
 viem's
 xbuyer

@@ -42,8 +42,13 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   more than **Most gas per sale** (0.05 by default).
 - **The log is reconciled against the chain.** A settlement sent but not
   mined in time is logged `failed` with its transaction, and cron settles
-  the doubt from the receipt; once a week it checks that each settled sale
-  moved its amount on chain. `drush x402:reconcile` does both now.
+  the doubt from the receipt (asking the token first whether the buyer's
+  authorization was spent by another transaction); once a week it checks that
+  each settled sale moved its amount on chain, from the network's token and
+  the payer, and that no two sales cite one transaction. A sale of the
+  `upfront` flow whose settlement was sent but not confirmed is logged too.
+  `drush x402:reconcile` does both now and exits 1 when the chain disagrees.
+  Run `drush updatedb`: the log gains a `nonce` column.
 - **Refused payments are limited per visitor** (30 an hour by default, then
   429), as a setting.
 - **The drupal.org pipeline passes:** phpcs, phpstan and cspell.
@@ -77,13 +82,22 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
 - **The log against the chain**: a settlement sent but not mined in time
   is logged `failed` with its transaction; each cron reads its receipt and
   logs it settled (marked for a refund: the buyer got no body), reverted
-  or dropped. Once a week, cron checks that each settled sale of the last
-  8 days moved its amount to its payTo on chain; `drush x402:reconcile`
-  does both now. EVM only, recent rows only (nodes forget old ones).
+  or dropped; before calling one unpaid it asks the token whether the
+  buyer's authorization was spent by another transaction, and if so flags
+  the row `authorization_used` for a person to check. Once a week, cron
+  checks that each settled sale of the last 8 days moved its amount to its
+  payTo on chain, from the network's token and from the payer, and that no
+  other sale cites the same transaction. `drush x402:reconcile` does both
+  now and exits 1 when the chain disagrees. A settlement of the `upfront`
+  flow that was sent but not confirmed is logged too. EVM only, recent rows
+  only (nodes forget old ones).
 - **Sanctions screening**: each payer is checked against OFAC's SDN list
   (see *What is new*); a listed payer is refused with the facilitator never
   asked, and the refusal is logged.
 - **Refused payments**: 30 per visitor (IP) an hour by default, then 429.
+  Behind a proxy, trust only `X-Forwarded-*` in
+  `reverse_proxy_trusted_headers`: a visitor can send `Forwarded` themselves
+  and dodge the limit.
   Change it at the settings form (**Refused payments per visitor**) or in
   `refused_payments`; 0 is no limit. Asking the price is never limited.
 - **The `x402_price` field**: add it to any fieldable entity and agents pay
@@ -225,7 +239,7 @@ library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an
 `Solana::pay()` is gone: `Quebracho\X402\SolanaExact::pay()` builds the
 payment, and `Buyer::pay()` still buys a whole call.
 
-After updating run `drush cr`; the new services
+After updating run `drush updatedb` and `drush cr`; the new column and services
 (`x402_pay.ofac`, `x402_pay.library_log`) are picked up on rebuild.
 
 ## Networks and keys

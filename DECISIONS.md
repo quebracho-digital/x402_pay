@@ -131,8 +131,64 @@ entity's own resource is charged by the gate, as any route is.
 | A Views REST export lists sold entities free. | It is the site builder's own export, and has no per-row access. |
 | A file's bytes are served by its URL. | Files are a separate mechanism (private files, `file_download`). |
 | An old revision is judged by its own price. | It needs the permission to view revisions, which editors have. |
+| A pending settlement that sent no transaction (`transaction ''`) is never closed. | It moved no money; the row is noise, not a loss. |
+| The weekly check reads every settled sale of the last 8 days in one cron run. | A site with thousands of sales a week needs a queue (Queue API, not Batch API, which is for interactive runs). |
+| `PaymentEvent` is not dispatched when the reconciler changes a row. | Subscribers see the sale as it ended at request time; the log has the later outcome. |
+| The refused-payments limit counts settle failures that are not the buyer's fault. | Telling them apart needs the facilitator's reason codes to be stable. |
 
 Revisit each one when a site needs it.
+
+### The reconciler asks the chain about the signature, not the facilitator (2026-11-08)
+
+Three reviewers read the reconciliation (2026-11-02) and a fourth audited the
+fixes (2026-11-08). The first version of the fix still believed the payer and
+the transaction hash the facilitator reported; the audit showed a lying
+facilitator could pass it. What the code does now, each with a test that
+failed first:
+
+- **The log names whoever signed.** `payer` and `nonce` come from the signed
+  authorization (the library has checked the signature), not from the
+  facilitator's answer. The hash is stored in lower case, so the same
+  transaction in another case counts as one.
+- **A sale is paid when its own authorization was spent in the transaction it
+  cites.** The weekly check wants the token's `AuthorizationUsed` event for
+  that payer and nonce, plus a Transfer of the amount to payTo, both from the
+  network's token, and no other sale citing the transaction. A Transfer alone
+  proves nothing: any contract can emit one. Rows from before the `nonce`
+  column (no nonce) keep the older check: token, payer, amount, payTo.
+- **A failed row stays open while its authorization can be spent.** Anyone
+  holding the signed payload can submit it first; then the site's own
+  transaction reverts and the buyer did pay. Rows that may have moved money
+  (`settlement_pending`, a facilitator that timed out, `transaction_reverted`,
+  dropped) are asked about on every cron for 8 days; if the token says the
+  authorization is spent they become `authorization_used`, for a person to
+  check. Not called settled: cancelling an authorization spends it too. A
+  node that does not answer is not a verdict: the row waits.
+- **A settle that may have moved money is logged and stays claimed**
+  (`Settlement::MAY_HAVE_MOVED`), with the nonce, in the upfront flow too. The
+  buyer signs anew instead of retrying.
+- **The log never turns a paid sale into a 500:** a database failure writes
+  the sale's details to the log channel instead.
+- **A garbage answer from a node, or one failing cron step, does not stop the
+  rest** (the OFAC refresh runs first and apart).
+- **The sanctions list is read back after every download** and removed if it
+  does not parse (the library fails closed on a corrupt list, which would
+  refuse every sale for a day). The status report shows its age and warns
+  after a week.
+- **`drush x402:reconcile` exits 1** when the chain disagrees, a node did not
+  answer, or rows already wait for a person (a refund owed, an authorization
+  spent elsewhere).
+- **Rejected:** marking the row settled when the authorization is spent.
+
+A row is not judged reverted or dropped before the authorization's
+`validBefore` has passed (stored in the log): until then anyone holding the
+signed payload can still submit it. The sanctions list is written readable by
+every user (0644, directory 0755): cron and PHP-FPM may run as different users.
+
+Known gaps: the sanctions list is only as fresh as the cron that downloads it
+(the status report says how old it is); the library logs the payer and payTo
+of every sale at info level (an `x402 intent` line), which is personal data of
+a pseudonymous kind.
 
 ### Markdownify is not a dependency
 
