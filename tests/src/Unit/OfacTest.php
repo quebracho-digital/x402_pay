@@ -77,15 +77,15 @@ class OfacTest extends UnitTestCase {
   /**
    * A ListSync that writes a snapshot listing LISTED, or throws.
    */
-  private function sync(bool $fails = FALSE): ListSync {
-    return new class($fails) implements ListSync {
+  private function sync(bool $fails = FALSE, bool $corrupt = FALSE): ListSync {
+    return new class($fails, $corrupt) implements ListSync {
 
       /**
        * How many times it was asked.
        */
       public int $calls = 0;
 
-      public function __construct(private readonly bool $fails) {}
+      public function __construct(private readonly bool $fails, private readonly bool $corrupt = FALSE) {}
 
       /**
        * Writes a snapshot that lists the address.
@@ -94,6 +94,11 @@ class OfacTest extends UnitTestCase {
         $this->calls++;
         if ($this->fails) {
           throw new \RuntimeException('OFAC SDN: HTTP 503.');
+        }
+        if ($this->corrupt) {
+          // A short write on a full disk: half a file.
+          file_put_contents($file, '{"source":"test","published":"2999-01-01T0');
+          return new SyncResult(1, '2999-01-01T00:00:00Z', TRUE);
         }
         file_put_contents($file, json_encode([
           'source' => 'test',
@@ -161,6 +166,52 @@ class OfacTest extends UnitTestCase {
     $this->now += 1;
     $ofac->refresh();
     $this->assertSame(2, $sync->calls, 'Retried within the hour, not tomorrow.');
+  }
+
+  /**
+   * A snapshot that does not read back is removed, not left to refuse sales.
+   *
+   * The library fails closed on a corrupt list: every sale would be refused
+   * until the next download, a day away.
+   *
+   * @covers ::refresh
+   */
+  public function testSnapshotThatDoesNotReadBackIsRemoved(): void {
+    $sync = $this->sync(FALSE, TRUE);
+    $ofac = $this->ofac($sync);
+    $ofac->refresh();
+    $this->assertFileDoesNotExist($ofac->snapshot());
+    $this->assertSame('warning', $this->logger->lines[0][0]);
+    $this->assertFalse($ofac->list()->listed(self::LISTED), 'The shipped list stays in use.');
+    $this->now += Ofac::RETRY;
+    $ofac->refresh();
+    $this->assertSame(2, $sync->calls, 'Retried soon.');
+  }
+
+  /**
+   * @covers ::age
+   */
+  public function testItSaysHowOldTheListInUseIs(): void {
+    $ofac = $this->ofac($this->sync());
+    $this->assertGreaterThan(Ofac::INTERVAL, $ofac->age(), 'The shipped list alone is as old as the release.');
+    $ofac->refresh();
+    $this->assertSame('2999-01-01T00:00:00Z', $ofac->list()->published());
+    $this->assertLessThan(0, $ofac->age(), 'A list from the future is not old.');
+  }
+
+  /**
+   * The list is public data: the web user must be able to read what cron wrote.
+   *
+   * Cron may run as a deploy user and PHP-FPM as another; a list only the first
+   * can read leaves every sale on the older, shipped list without a word.
+   *
+   * @covers ::refresh
+   */
+  public function testTheSnapshotCanBeReadByOtherUsers(): void {
+    $ofac = $this->ofac($this->sync());
+    $ofac->refresh();
+    $this->assertSame(0644, fileperms($ofac->snapshot()) & 0777);
+    $this->assertSame(0755, fileperms(dirname($ofac->snapshot())) & 0777);
   }
 
 }

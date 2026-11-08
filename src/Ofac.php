@@ -66,6 +66,14 @@ final class Ofac {
   }
 
   /**
+   * Seconds since OFAC published the list a sale reads (negative: a future date).
+   */
+  public function age(): int {
+    $published = strtotime($this->list()->published());
+    return $published === FALSE ? PHP_INT_MAX : $this->time->getRequestTime() - $published;
+  }
+
+  /**
    * Downloads the list when it is time. Never throws: cron goes on.
    */
   public function refresh(): void {
@@ -78,7 +86,20 @@ final class Ofac {
       if (!is_dir(dirname($file)) && !mkdir(dirname($file), 0750, TRUE) && !is_dir(dirname($file))) {
         throw new \RuntimeException('cannot create ' . dirname($file));
       }
+      // The list is public data, and cron may run as another user than PHP-FPM:
+      // what only cron could read would leave every sale on the shipped list.
+      @chmod(dirname($file), 0755);
       $result = $this->sync->sync($file);
+      @chmod($file, 0644);
+      // The library fails closed on a list it cannot read, which would refuse
+      // every sale until the next download: read it back before trusting it.
+      try {
+        (new OfacSdn($file))->listed('0x0000000000000000000000000000000000000000');
+      }
+      catch (\Throwable $e) {
+        @unlink($file);
+        throw new \RuntimeException('the downloaded list does not read back (' . $e->getMessage() . '), removed');
+      }
     }
     catch (\Throwable $e) {
       $this->state->set(self::STATE, $now + self::RETRY);

@@ -8,6 +8,7 @@ use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Hook\Attribute\Hook;
@@ -74,10 +75,52 @@ class X402PayHooks {
    */
   #[Hook('cron')]
   public function cron(): void {
-    $this->sweeper->cron();
-    $this->claims->prune();
-    $this->reconciler->cron();
-    $this->ofac->refresh();
+    // Each step on its own: one that fails (a node answering garbage) must
+    // not skip the others, least of all the sanctions list.
+    foreach ([
+      'OFAC list' => fn() => $this->ofac->refresh(),
+      'sweeper' => fn() => $this->sweeper->cron(),
+      'claims' => fn() => $this->claims->prune(),
+      'reconciler' => fn() => $this->reconciler->cron(),
+    ] as $step => $run) {
+      try {
+        $run();
+      }
+      catch (\Throwable $e) {
+        \Drupal::logger('x402_pay')->error('Cron step "@step" failed: @message', [
+          '@step' => $step,
+          '@message' => $e->getMessage(),
+        ]);
+      }
+    }
+  }
+
+  /**
+   * Shows how old the sanctions list in use is; warns after a week.
+   *
+   * A site whose cron is broken keeps screening against a list that only
+   * gets older, and nothing else would say so.
+   *
+   * @return array<string, array<string, mixed>>
+   *   The status report line.
+   */
+  #[Hook('runtime_requirements')]
+  public function runtimeRequirements(string $phase): array {
+    if ($phase !== 'runtime') {
+      return [];
+    }
+    $age = $this->ofac->age();
+    $stale = $age > 7 * 86400;
+    $ok = enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : 0;
+    $warning = enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : 1;
+    return [
+      'x402_pay_ofac' => [
+        'title' => $this->t('x402 Pay sanctions list'),
+        'value' => $this->t('OFAC SDN list published @date', ['@date' => $this->ofac->list()->published()]),
+        'description' => $stale ? $this->t('The list is over a week old: check that cron runs and can write to the files directory, or the payers are screened against an out-of-date list.') : '',
+        'severity' => $stale ? $warning : $ok,
+      ],
+    ];
   }
 
   /**

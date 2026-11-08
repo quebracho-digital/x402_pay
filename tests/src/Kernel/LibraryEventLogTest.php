@@ -7,6 +7,7 @@ namespace Drupal\Tests\x402_pay\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\x402_pay\Hook\X402PayHooks;
 use Quebracho\X402\AddressRejected;
 use Quebracho\X402\OfacSdn;
 
@@ -51,6 +52,15 @@ final class LibraryEventLogTest extends KernelTestBase {
     $list = $this->container->get('x402_pay.ofac_sdn');
     $this->assertInstanceOf(OfacSdn::class, $list);
     $this->assertNotSame('', $list->published(), 'Even without a snapshot the shipped list is in use.');
+  }
+
+  /**
+   * The status report shows how old the sanctions list in use is.
+   */
+  public function testTheStatusReportShowsTheListAge(): void {
+    $requirements = $this->container->get(X402PayHooks::class)->runtimeRequirements('runtime');
+    $this->assertArrayHasKey('x402_pay_ofac', $requirements);
+    $this->assertStringContainsString('published', (string) $requirements['x402_pay_ofac']['value']);
   }
 
 }
