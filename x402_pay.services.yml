@@ -35,6 +35,7 @@ services:
     arguments: ['@database', '@datetime.time']
   x402_pay.log:
     class: Drupal\x402_pay\PaymentLog
+    arguments: ['@database', '@datetime.time', '@logger.channel.x402_pay']
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
     arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory', '@x402_pay.ofac_sdn']

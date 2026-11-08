@@ -44,6 +44,16 @@ function x402_pay_schema(): array {
         'transaction' => ['type' => 'varchar_ascii', 'length' => 128],
         'handler_status' => ['type' => 'int', 'size' => 'small', 'not null' => TRUE],
         'error' => ['type' => 'varchar', 'length' => 255],
+        'nonce' => [
+          'type' => 'varchar_ascii',
+          'length' => 66,
+          'description' => 'The EIP-3009 authorization nonce, to ask the token whether it was spent.',
+        ],
+        'valid_before' => [
+          'type' => 'int',
+          'size' => 'big',
+          'description' => 'Until when the signed authorization can still be submitted (Unix time).',
+        ],
         'entity_type' => ['type' => 'varchar_ascii', 'length' => 32, 'description' => 'What was sold: its entity type…'],
         'entity_id' => ['type' => 'varchar_ascii', 'length' => 64, 'description' => '…and its id.'],
       ],
@@ -141,5 +151,17 @@ function x402_pay_update_10007(): void {
   $config = \Drupal::configFactory()->getEditable('x402_pay.settings');
   if ($config->get('refused_payments') === NULL) {
     $config->set('refused_payments', 30)->save();
+  }
+}
+
+/**
+ * Adds the authorization nonce and its deadline to the payment log.
+ */
+function x402_pay_update_10008(): void {
+  $schema = \Drupal::database()->schema();
+  foreach (['nonce', 'valid_before'] as $name) {
+    if (!$schema->fieldExists('x402_pay_log', $name)) {
+      $schema->addField('x402_pay_log', $name, x402_pay_schema()['x402_pay_log']['fields'][$name]);
+    }
   }
 }

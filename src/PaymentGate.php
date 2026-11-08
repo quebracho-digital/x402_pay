@@ -160,7 +160,9 @@ class PaymentGate {
         // Nothing broadcast: the same payment may be offered again. A
         // transaction sent but not confirmed (settlement_pending) stays
         // claimed, since it may still land.
-        if (($receipt['transaction'] ?? '') === '') {
+        // The same for a failure that may have moved money (the facilitator
+        // sent it and timed out): the buyer must sign anew, not retry.
+        if (($receipt['transaction'] ?? '') === '' && !in_array($receipt['errorReason'] ?? '', Settlement::MAY_HAVE_MOVED, TRUE)) {
           $this->claims->release(Settlement::key($payment));
         }
         return $receipt;
@@ -248,16 +250,21 @@ class PaymentGate {
     if ($run->handlerStatus === NULL && $settlement === NULL) {
       return;
     }
+    $authorization = $this->authorization($request);
     $entry = [
       'resource' => $resource['url'],
       'network' => $requirements['network'],
       'amount' => $requirements['amount'],
       'pay_to' => $requirements['payTo'],
-      'payer' => $settlement['payer'] ?? $run->payer,
+      // Whoever signed, not whoever the facilitator says: the library has
+      // checked the signature, and the reconciler checks the chain against it.
+      'payer' => $authorization['from'] ?? $settlement['payer'] ?? $run->payer,
       'handler_status' => $run->handlerStatus,
-      'transaction' => $settlement['transaction'] ?? NULL,
+      'transaction' => $this->hash($requirements['network'], $settlement['transaction'] ?? NULL),
       'entity_type' => $resource['entity_type'] ?? NULL,
       'entity_id' => $resource['entity_id'] ?? NULL,
+      'nonce' => $authorization['nonce'] ?? NULL,
+      'valid_before' => $authorization['validBefore'] ?? NULL,
     ];
     if ($settlement === NULL) {
       $this->record($request, ['status' => 'not_settled', 'error' => $run->error] + $entry);
@@ -268,10 +275,61 @@ class PaymentGate {
       $this->record($request, ['status' => 'settled', 'error' => $error] + $entry);
     }
     elseif ($run->handlerStatus !== NULL) {
-      // Delivered but not paid: the body was withheld. (Settling that fails
-      // before the handler ran, in the upfront flow, moved nothing.)
+      // Delivered but not paid: the body was withheld.
       $this->record($request, ['status' => 'failed', 'error' => $settlement['errorReason'] ?? NULL] + $entry);
     }
+    elseif (($settlement['transaction'] ?? '') !== '' || in_array($settlement['errorReason'] ?? '', Settlement::MAY_HAVE_MOVED, TRUE)) {
+      // The upfront flow settled before the handler, and the transaction was
+      // sent but not confirmed, or the facilitator timed out after sending
+      // it: the money may still move, so the buyer may have paid and got
+      // nothing. Logged for the reconciler. A refusal that cannot have moved
+      // money (an invalid payment, say) is not logged.
+      $this->record($request, [
+        'status' => 'failed',
+        'error' => $settlement['errorReason'] ?? NULL,
+        'handler_status' => 0,
+      ] + $entry);
+    }
+  }
+
+  /**
+   * The signed EIP-3009 authorization of the request: signer, nonce, deadline.
+   *
+   * @return array{from?: string, nonce?: string, validBefore?: int}
+   *   Empty when the request pays another way or carries no payment.
+   */
+  private function authorization(Request $request): array {
+    try {
+      $payment = PaymentHeaders::decode((string) $request->headers->get(PaymentHeaders::SIGNATURE));
+    }
+    catch (\Throwable) {
+      return [];
+    }
+    $authorization = $payment['payload']['authorization'] ?? [];
+    $found = [];
+    $from = $authorization['from'] ?? NULL;
+    if (is_string($from) && preg_match('/^0x[0-9a-fA-F]{40}$/', $from)) {
+      $found['from'] = $from;
+    }
+    $nonce = $authorization['nonce'] ?? NULL;
+    if (is_string($nonce) && preg_match('/^0x[0-9a-fA-F]{64}$/', $nonce)) {
+      $found['nonce'] = strtolower($nonce);
+    }
+    $until = $authorization['validBefore'] ?? NULL;
+    if ((is_string($until) || is_int($until)) && preg_match('/^[0-9]{1,15}$/', (string) $until)) {
+      $found['validBefore'] = (int) $until;
+    }
+    return $found;
+  }
+
+  /**
+   * A transaction hash as the log keeps it: lower case on EVM networks.
+   *
+   * The node answers to any case, so the same transaction must not look like
+   * two when the reconciler counts who cites it.
+   */
+  private function hash(string $network, ?string $transaction): ?string {
+    return $transaction !== NULL && str_starts_with($network, 'eip155:') ? strtolower($transaction) : $transaction;
   }
 
   /**

@@ -30,6 +30,11 @@ final class SettlementHardeningTest extends KernelTestBase {
   private const PAY_TO = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 
   /**
+   * USDC on Arc testnet.
+   */
+  private const TOKEN = '0x3600000000000000000000000000000000000000';
+
+  /**
    * {@inheritdoc}
    */
   protected static $modules = ['x402_pay', 'key'];
@@ -131,6 +136,7 @@ final class SettlementHardeningTest extends KernelTestBase {
    */
   public function testSettledSalesAreCheckedAgainstTheChain(): void {
     $transfer = fn(string $amount) => [
+      'address' => self::TOKEN,
       'topics' => [
         '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
         '0x' . str_repeat('0', 24) . str_repeat('1', 40),
@@ -153,6 +159,215 @@ final class SettlementHardeningTest extends KernelTestBase {
   }
 
   /**
+   * Only the network's token, from the payer, to payTo, counts as the payment.
+   *
+   * A facilitator that lies can cite any transaction that has a Transfer-shaped
+   * event of the right amount to payTo; the check exists to catch that.
+   */
+  public function testSaleNeedsItsTokenItsBuyerAndItsOwnHash(): void {
+    $transfer = fn(string $token, string $from) => [
+      'address' => $token,
+      'topics' => [
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+        '0x' . str_repeat('0', 24) . $from,
+        '0x' . str_repeat('0', 24) . strtolower(substr(self::PAY_TO, 2)),
+      ],
+      'data' => '0x' . str_pad(dechex(10000), 64, '0', STR_PAD_LEFT),
+    ];
+    $payer = str_repeat('1', 40);
+    $good = $this->row('settled', NULL, '0x' . str_repeat('a', 64));
+    $fakeToken = $this->row('settled', NULL, '0x' . str_repeat('b', 64));
+    $otherBuyer = $this->row('settled', NULL, '0x' . str_repeat('c', 64));
+    $twice1 = $this->row('settled', NULL, '0x' . str_repeat('d', 64));
+    $twice2 = $this->row('settled', NULL, '0x' . str_repeat('d', 64));
+
+    $problems = array_column($this->reconciler([
+      str_repeat('a', 64) => ['status' => '0x1', 'logs' => [$transfer(self::TOKEN, $payer)]],
+      str_repeat('b', 64) => ['status' => '0x1', 'logs' => [$transfer('0x' . str_repeat('9', 40), $payer)]],
+      str_repeat('c', 64) => ['status' => '0x1', 'logs' => [$transfer(self::TOKEN, str_repeat('2', 40))]],
+      str_repeat('d', 64) => ['status' => '0x1', 'logs' => [$transfer(self::TOKEN, $payer)]],
+    ])->settled(8), 'problem', 'id');
+
+    $this->assertNull($problems[$good]);
+    $this->assertSame('no transfer of the amount to payTo', $problems[$fakeToken], 'Another contract emitted it.');
+    $this->assertSame('no transfer of the amount to payTo', $problems[$otherBuyer], 'Not from the payer.');
+    $this->assertSame('transaction cited by another sale', $problems[$twice1]);
+    $this->assertSame('transaction cited by another sale', $problems[$twice2]);
+  }
+
+  /**
+   * A reverted or lost transaction is not "unpaid" while the authorization is spent.
+   *
+   * The buyer's signed authorization can be used by a transaction other than
+   * the one logged (a rebroadcast with another gas price): the money moved
+   * and the log must not say it did not.
+   */
+  public function testAnAuthorizationUsedElsewhereIsNotCalledUnpaid(): void {
+    $nonce = '0x' . str_repeat('e', 64);
+    $reverted = $this->row('failed', 'settlement_pending', '0x' . str_repeat('a', 64), 60, $nonce);
+    $lost = $this->row('failed', 'settlement_pending', '0x' . str_repeat('b', 64), 2 * 86400, $nonce);
+    $receipts = [str_repeat('a', 64) => ['status' => '0x0', 'logs' => []]];
+
+    $this->reconciler($receipts, TRUE)->pending();
+    $this->assertSame('authorization_used: paid by another transaction? check by hand', $this->outcome($reverted)[1]);
+    $this->assertSame('authorization_used: paid by another transaction? check by hand', $this->outcome($lost)[1]);
+    $this->assertSame('failed', $this->outcome($reverted)[0], 'Not claimed settled: a cancelled authorization is used too.');
+
+    // Unused, they are what they were: reverted and dropped.
+    $second = $this->row('failed', 'settlement_pending', '0x' . str_repeat('c', 64), 60, $nonce);
+    $receipts[str_repeat('c', 64)] = ['status' => '0x0', 'logs' => []];
+    $this->reconciler($receipts, FALSE)->pending();
+    $this->assertSame('transaction_reverted', $this->outcome($second)[1]);
+  }
+
+  /**
+   * The sale's own authorization must be spent in the transaction it cites.
+   *
+   * A facilitator can cite any transfer of the right amount to payTo; only the
+   * token's AuthorizationUsed event names the signed authorization (payer and
+   * nonce) that this sale was paid with.
+   */
+  public function testSaleNeedsItsAuthorizationSpentInItsTransaction(): void {
+    $payer = '0x1111111111111111111111111111111111111111';
+    $nonce = fn(string $c) => '0x' . str_repeat($c, 64);
+    $transfer = [
+      'address' => self::TOKEN,
+      'topics' => [
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+        '0x' . str_repeat('0', 24) . substr($payer, 2),
+        '0x' . str_repeat('0', 24) . strtolower(substr(self::PAY_TO, 2)),
+      ],
+      'data' => '0x' . str_pad(dechex(10000), 64, '0', STR_PAD_LEFT),
+    ];
+    $used = fn(string $n, string $by = '1') => [
+      'address' => self::TOKEN,
+      'topics' => [
+        '0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5',
+        '0x' . str_repeat('0', 24) . str_repeat($by, 40),
+        $n,
+      ],
+      'data' => '0x',
+    ];
+    $good = $this->row('settled', NULL, '0x' . str_repeat('a', 64), 60, $nonce('1'));
+    $bare = $this->row('settled', NULL, '0x' . str_repeat('b', 64), 60, $nonce('2'));
+    $other = $this->row('settled', NULL, '0x' . str_repeat('c', 64), 60, $nonce('3'));
+    $stranger = $this->row('settled', NULL, '0x' . str_repeat('d', 64), 60, $nonce('4'));
+    $nobody = $this->row('settled', NULL, '0x' . str_repeat('e', 64), 60, $nonce('5'), NULL);
+
+    $problems = array_column($this->reconciler([
+      str_repeat('a', 64) => ['status' => '0x1', 'logs' => [$transfer, $used($nonce('1'))]],
+      str_repeat('b', 64) => ['status' => '0x1', 'logs' => [$transfer]],
+      str_repeat('c', 64) => ['status' => '0x1', 'logs' => [$transfer, $used($nonce('9'))]],
+      str_repeat('d', 64) => ['status' => '0x1', 'logs' => [$transfer, $used($nonce('4'), '2')]],
+      str_repeat('e', 64) => ['status' => '0x1', 'logs' => [$transfer, $used($nonce('5'))]],
+    ])->settled(8), 'problem', 'id');
+
+    $this->assertNull($problems[$good]);
+    $this->assertSame('authorization not spent in this transaction', $problems[$bare], 'A transfer alone proves nothing.');
+    $this->assertSame('authorization not spent in this transaction', $problems[$other], 'Another nonce.');
+    $this->assertSame('authorization not spent in this transaction', $problems[$stranger], 'Another authorizer.');
+    $this->assertSame('unverifiable: the log has no payer', $problems[$nobody]);
+  }
+
+  /**
+   * The same transaction in another letter case is the same transaction.
+   */
+  public function testTheSameHashInAnotherCaseIsStillShared(): void {
+    $one = $this->row('settled', NULL, '0x' . str_repeat('a', 64));
+    $two = $this->row('settled', NULL, '0x' . str_repeat('A', 64));
+    $transfer = [
+      'address' => self::TOKEN,
+      'topics' => [
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+        '0x' . str_repeat('0', 24) . str_repeat('1', 40),
+        '0x' . str_repeat('0', 24) . strtolower(substr(self::PAY_TO, 2)),
+      ],
+      'data' => '0x' . str_pad(dechex(10000), 64, '0', STR_PAD_LEFT),
+    ];
+    $problems = array_column($this->reconciler([str_repeat('a', 64) => ['status' => '0x1', 'logs' => [$transfer]]])->settled(8), 'problem', 'id');
+    $this->assertSame('transaction cited by another sale', $problems[$one]);
+    $this->assertSame('transaction cited by another sale', $problems[$two]);
+  }
+
+  /**
+   * A reverted row stays open while its authorization can still be spent.
+   *
+   * Anyone holding the signed payload can submit it first: the site's own
+   * transaction then reverts, but the buyer did pay.
+   */
+  public function testRevertedRowIsReexaminedAndFlaggedWhenAuthorizationIsSpent(): void {
+    $nonce = '0x' . str_repeat('e', 64);
+    $reverted = $this->row('failed', 'transaction_reverted', '0x' . str_repeat('a', 64), 60, $nonce);
+    $this->reconciler([str_repeat('a', 64) => ['status' => '0x0', 'logs' => []]], TRUE)->pending();
+    $this->assertSame(Reconciler::USED, $this->outcome($reverted)[1]);
+  }
+
+  /**
+   * A node that does not answer is not a verdict.
+   */
+  public function testFailedRpcCallLeavesRowPending(): void {
+    $nonce = '0x' . str_repeat('e', 64);
+    $row = $this->row('failed', 'settlement_pending', '0x' . str_repeat('a', 64), 60, $nonce);
+    $receipts = [str_repeat('a', 64) => ['status' => '0x0', 'logs' => []]];
+
+    $outcomes = array_column($this->reconciler($receipts, NULL)->pending(), 'outcome', 'id');
+    $this->assertSame('no_answer', $outcomes[$row]);
+    $this->assertSame('settlement_pending', $this->outcome($row)[1], 'Not called reverted on a guess.');
+
+    $this->reconciler($receipts, TRUE)->pending();
+    $this->assertSame(Reconciler::USED, $this->outcome($row)[1], 'The next run decides.');
+  }
+
+  /**
+   * A reverted row is not judged while its authorization can still be spent.
+   *
+   * Until validBefore anyone holding the signed payload can submit it, so a
+   * revert seen before then is not the end of the story.
+   */
+  public function testNothingIsJudgedBeforeValidBefore(): void {
+    $now = \Drupal::time()->getRequestTime();
+    $nonce = '0x' . str_repeat('e', 64);
+    $early = $this->row('failed', 'settlement_pending', '0x' . str_repeat('a', 64), 60, $nonce, validBefore: $now + 3600);
+    $late = $this->row('failed', 'settlement_pending', '0x' . str_repeat('b', 64), 60, $nonce, validBefore: $now - 10);
+    $receipts = [
+      str_repeat('a', 64) => ['status' => '0x0', 'logs' => []],
+      str_repeat('b', 64) => ['status' => '0x0', 'logs' => []],
+    ];
+
+    $outcomes = array_column($this->reconciler($receipts)->pending(), 'outcome', 'id');
+    $this->assertSame('pending', $outcomes[$early]);
+    $this->assertSame('settlement_pending', $this->outcome($early)[1], 'Still open: the authorization can be spent.');
+    $this->assertSame('reverted', $outcomes[$late]);
+    $this->assertSame('transaction_reverted', $this->outcome($late)[1]);
+  }
+
+  /**
+   * A node answering garbage must not take the cron run down with it.
+   */
+  public function testGarbageFromTheNodeIsNotFatal(): void {
+    $nonce = '0x' . str_repeat('e', 64);
+    $this->row('failed', 'settlement_pending', '0x' . str_repeat('a', 64), 60, $nonce);
+    $this->row('settled', NULL, '0x' . str_repeat('b', 64), 60, $nonce);
+    $garbage = [
+      'address' => self::TOKEN,
+      'topics' => [
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+        '0x1',
+        '0x2',
+      ],
+      'data' => '0xzz',
+    ];
+    $receipts = [
+      str_repeat('a', 64) => ['status' => '0x0', 'logs' => []],
+      str_repeat('b', 64) => ['status' => '0x1', 'logs' => [$garbage]],
+    ];
+    $reconciler = $this->reconciler($receipts, '0xzz');
+    $reconciler->pending();
+    $problems = array_filter(array_column($reconciler->settled(8), 'problem'));
+    $this->assertNotEmpty($problems, 'A row it cannot verify is a problem, not an exception.');
+  }
+
+  /**
    * The wei cap the gate's facilitator for Arc testnet got.
    */
   private function gasCap(): ?string {
@@ -164,10 +379,19 @@ final class SettlementHardeningTest extends KernelTestBase {
   /**
    * A reconciler whose node knows these receipts, by hash without 0x.
    */
-  private function reconciler(array $receipts): Reconciler {
-    $answer = function ($request) use ($receipts) {
-      $hash = json_decode((string) $request->getBody(), TRUE)['params'][0];
-      $receipt = $receipts[substr($hash, 2)] ?? NULL;
+  private function reconciler(array $receipts, bool|string|null $authorizationUsed = FALSE): Reconciler {
+    $answer = function ($request) use ($receipts, $authorizationUsed) {
+      $call = json_decode((string) $request->getBody(), TRUE);
+      if ($call['method'] === 'eth_call') {
+        if ($authorizationUsed === NULL) {
+          $error = ['code' => -32005, 'message' => 'rate limited'];
+          return new Response(200, [], json_encode(['jsonrpc' => '2.0', 'id' => 1, 'error' => $error]));
+        }
+        // authorizationState(payer, nonce): a bool as a 32-byte word.
+        $word = is_string($authorizationUsed) ? $authorizationUsed : '0x' . str_repeat('0', 63) . ($authorizationUsed ? '1' : '0');
+        return new Response(200, [], json_encode(['jsonrpc' => '2.0', 'id' => 1, 'result' => $word]));
+      }
+      $receipt = $receipts[strtolower(substr($call['params'][0], 2))] ?? NULL;
       return new Response(200, [], json_encode(['jsonrpc' => '2.0', 'id' => 1, 'result' => $receipt]));
     };
     $client = new Client(['handler' => HandlerStack::create(new MockHandler(array_fill(0, 10, $answer)))]);
@@ -178,18 +402,20 @@ final class SettlementHardeningTest extends KernelTestBase {
   /**
    * Logs a sale on Arc testnet $age seconds ago; returns its id.
    */
-  private function row(string $status, ?string $error, string $transaction, int $age = 60): int {
+  private function row(string $status, ?string $error, string $transaction, int $age = 60, ?string $nonce = NULL, ?string $payer = '0x1111111111111111111111111111111111111111', ?int $validBefore = NULL): int {
     return (int) \Drupal::database()->insert('x402_pay_log')->fields([
       'created' => \Drupal::time()->getRequestTime() - $age,
       'resource' => 'https://example.com/a',
       'network' => 'eip155:5042002',
       'amount' => '10000',
       'pay_to' => self::PAY_TO,
-      'payer' => '0x' . str_repeat('1', 40),
+      'payer' => $payer,
       'status' => $status,
       'transaction' => $transaction,
       'handler_status' => 200,
       'error' => $error,
+      'nonce' => $nonce,
+      'valid_before' => $validBefore,
     ])->execute();
   }
 

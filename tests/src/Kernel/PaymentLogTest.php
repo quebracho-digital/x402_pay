@@ -58,4 +58,23 @@ final class PaymentLogTest extends KernelTestBase {
     $this->assertGreaterThan(0, (int) $row['created']);
   }
 
+  /**
+   * A database failure after the money moved is logged, never a 500.
+   */
+  public function testLogFailureAfterSettlingDoesNotThrow(): void {
+    \Drupal::database()->schema()->dropField('x402_pay_log', 'nonce');
+    $this->container->get('x402_pay.log')->record([
+      'resource' => 'https://example.com/a',
+      'network' => 'eip155:5042002',
+      'amount' => '100',
+      'pay_to' => '0x7e510E6B4c3E2121CB64CD0686a4f241Df326510',
+      'payer' => '0xcb2d7f50D917FeD02b82ef08cEfBF9827463B794',
+      'status' => 'settled',
+      'transaction' => '0x2189f224626f989efef1c28f8f72a6ea205805f7394313139ddc2f51b027674d',
+      'handler_status' => 200,
+      'nonce' => '0x' . str_repeat('a', 64),
+    ]);
+    $this->addToAssertionCount(1);
+  }
+
 }

@@ -60,13 +60,23 @@ final class X402Commands extends DrushCommands {
   #[CLI\Command(name: 'x402:reconcile')]
   #[CLI\Option(name: 'days', description: 'How far back to check settled sales.')]
   #[CLI\Usage(name: 'drush x402:reconcile --days=8', description: 'Settles pending rows, then checks a week of sales.')]
-  public function reconcile(array $options = ['days' => 8]): void {
+  public function reconcile(array $options = ['days' => 8]): int {
     $rows = [...$this->reconciler->pending(), ...$this->reconciler->settled((int) $options['days'])];
     foreach ($rows as $row) {
       $this->io()->writeln(json_encode($row, JSON_UNESCAPED_SLASHES));
     }
-    $problems = array_filter($rows, fn($row) => !empty($row['problem']));
+    $open = ['authorization_used', 'no_answer'];
+    $problems = array_filter($rows, fn($row) => !empty($row['problem']) || in_array($row['outcome'] ?? '', $open, TRUE));
+    // Rows already waiting for a person (a refund owed, an authorization
+    // spent elsewhere) count on every run, not only the one that found them.
+    $standing = $this->reconciler->standing((int) $options['days']);
+    if ($standing) {
+      $this->logger()->error($standing . ' sales wait for a person (a refund owed, or an authorization spent by another transaction).');
+    }
+    $problems = $problems ?: ($standing ? [TRUE] : []);
     $problems ? $this->logger()->error(count($problems) . ' sales disagree with the chain.') : $this->logger()->success(count($rows) . ' rows checked.');
+    // Non-zero when the chain disagrees, so a cron job or CI notices.
+    return $problems ? self::EXIT_FAILURE : self::EXIT_SUCCESS;
   }
 
   /**

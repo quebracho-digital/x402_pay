@@ -22,6 +22,7 @@ use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Quebracho\X402\EvmExact;
+use Quebracho\X402\FacilitatorException;
 use Quebracho\X402\Facilitator;
 use Quebracho\X402\PaymentHeaders;
 use Quebracho\X402\Signer;
@@ -221,6 +222,92 @@ final class PriceFieldTest extends KernelTestBase {
     $this->assertSame(402, $response->getStatusCode());
     $this->assertStringContainsString('address_sanctioned', $response->headers->get(PaymentHeaders::REQUIRED) . $response->getContent());
     $this->assertFalse(\Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc(), 'A refused payment is not a sale.');
+  }
+
+  /**
+   * An upfront settlement sent but not mined leaves a row for the reconciler.
+   *
+   * The handler never ran, but the transaction may still land: without a row
+   * the buyer paid, got nothing and nobody can see it.
+   */
+  public function testUpfrontSettlementStillPendingIsLogged(): void {
+    $this->listen(fn(PriceEvent $event) => $event->settleFirst());
+    $facilitator = $this->createMock(Facilitator::class);
+    $facilitator->method('verify')->willReturn([
+      'isValid' => TRUE,
+      'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
+    ]);
+    $facilitator->method('settle')->willReturn([
+      'success' => FALSE,
+      'errorReason' => 'settlement_pending',
+      'transaction' => self::TX,
+      'network' => 'eip155:5042002',
+      'payer' => '0x857b06519E91e3A54538791bDbb0E22373e36b66',
+    ]);
+    $this->useFacilitator($facilitator);
+
+    $accepted = $this->required('/entity_test/1', ['Accept' => 'text/markdown'])['accepts'][0];
+    $this->assertSame('upfront', $accepted['extra']['paymentFlow'] ?? NULL);
+    $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($accepted)]);
+
+    $row = \Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc();
+    $this->assertNotFalse($row, 'A transaction was sent: the sale must be in the log.');
+    $this->assertSame('failed', $row['status']);
+    $this->assertSame('settlement_pending', $row['error']);
+    $this->assertSame(self::TX, $row['transaction']);
+  }
+
+  /**
+   * The log names the signer and a lower-case hash, whatever the facilitator says.
+   */
+  public function testTheLogKeepsWhoSignedNotWhoTheFacilitatorSays(): void {
+    $facilitator = $this->createMock(Facilitator::class);
+    $facilitator->method('verify')->willReturn([
+      'isValid' => TRUE,
+      'payer' => '0x000000000000000000000000000000000000dEaD',
+    ]);
+    $facilitator->method('settle')->willReturn([
+      'success' => TRUE,
+      'transaction' => '0x' . strtoupper(substr(self::TX, 2)),
+      'network' => 'eip155:5042002',
+      'payer' => '0x000000000000000000000000000000000000dEaD',
+    ]);
+    $this->useFacilitator($facilitator);
+    $accepted = X402PriceItem::find($this->entity)->requirements();
+    $header = $this->payment($accepted);
+    $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $header]);
+
+    $row = \Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc();
+    $signed = (new Signer('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'))->address();
+    $this->assertSame(strtolower($signed), strtolower($row['payer']), 'The payer is whoever signed.');
+    $this->assertSame(self::TX, $row['transaction']);
+    $authorization = PaymentHeaders::decode($header)['payload']['authorization'];
+    $this->assertSame($authorization['nonce'], $row['nonce']);
+    $this->assertSame((int) $authorization['validBefore'], (int) $row['valid_before']);
+  }
+
+  /**
+   * A settle that may have moved money is logged, and its payment stays claimed.
+   *
+   * The facilitator can send the transaction and then time out; the buyer paid
+   * and the reconciler needs a row (with the nonce) to see it.
+   */
+  public function testSettleThatMayHaveMovedMoneyIsLoggedAndStaysClaimed(): void {
+    $this->listen(fn(PriceEvent $event) => $event->settleFirst());
+    $facilitator = $this->createMock(Facilitator::class);
+    $facilitator->method('verify')->willReturn(['isValid' => TRUE, 'payer' => NULL]);
+    $facilitator->method('settle')->willThrowException(new FacilitatorException('timed out'));
+    $this->useFacilitator($facilitator);
+
+    $accepted = $this->required('/entity_test/1', ['Accept' => 'text/markdown'])['accepts'][0];
+    $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($accepted)]);
+
+    $row = \Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc();
+    $this->assertNotFalse($row, 'It may have moved money: it is in the log.');
+    $this->assertSame('failed', $row['status']);
+    $this->assertSame('facilitator_unavailable', $row['error']);
+    $this->assertNotEmpty($row['nonce']);
+    $this->assertSame(1, (int) \Drupal::database()->select('x402_pay_claim')->countQuery()->execute()->fetchField(), 'The payment stays claimed.');
   }
 
   /**
