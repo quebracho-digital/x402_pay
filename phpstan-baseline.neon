@@ -1,0 +1,9 @@
+# quebracho/x402 0.4 marks the whole HttpFacilitator constructor deprecated by
+# a misplaced docblock; only its $seller argument is. Facilitators::http()
+# never passes one.
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to deprecated method __construct\(\) of class Quebracho\\X402\\HttpFacilitator#'
+			count: 1
+			path: src/Facilitators.php

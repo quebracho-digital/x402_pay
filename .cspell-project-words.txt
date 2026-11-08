@@ -22,6 +22,7 @@ mdanter
 microlamport
 micropayments
 ñandú
+ofac
 ombú
 ombú's
 plusinf
