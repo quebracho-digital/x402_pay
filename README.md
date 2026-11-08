@@ -1,6 +1,55 @@
 # x402_pay
 
-Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
+Drupal module that charges for any response over HTTP 402 (x402), in USDC on
+**Arc** (and **Solana**), and buys from other agents the same way.
+
+## TL;DR
+
+- **What:** put a price on a route or an entity field (`x402_pay.gate`,
+  `x402_price`); an unpaid request gets a 402, a paid one settles **only on a
+  2xx response** and lands in a payment log. Live in
+  [Ombú](https://github.com/quebracho-digital/ombu), the agent mall.
+- **Built on:** the MIT library
+  [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
+  `^0.4` (protocol, signatures, facilitators, OFAC screening); this module
+  is what Drupal adds around it. PHP only: no Node.js, no npm.
+- **Install:** `composer require drupal/x402_pay`, enable it, set a seller key
+  (Key module) and a network at `/admin/config/services/x402`.
+- **Try it:** `BUYER_PRIVATE_KEY=0x… drush x402:buy <url> --max=0.05` pays a
+  402; `drush x402:reconcile` checks the log against the chain.
+- **Decisions and limits:** [DECISIONS.md](DECISIONS.md). **Plan:** Ombú's
+  [ROADMAP](https://github.com/quebracho-digital/ombu/blob/main/ROADMAP.md).
+
+## What is new in this release
+
+- **Runs on `quebracho/x402` 0.4.** Signing, headers, networks, the Circle,
+  HTTP and chain facilitators, the buyer and the sale middleware now live in
+  the library; the module keeps the Drupal side (log, claims, settings,
+  entity gate). The classes the library replaced stay as deprecated aliases
+  until 2.0.0 (see [Upgrading](#upgrading-from-100-beta2)).
+- **Payers are screened against OFAC's SDN list.** A sale refuses a payer
+  whose address is on the list, before the facilitator is asked. The library
+  ships a snapshot as old as its release; cron downloads the newest once a
+  day, and every sale reads the newer of the two. Where the file lives: the
+  private files directory when the site has one, the public one otherwise
+  (the list is public).
+- **The library's events reach Drupal's log.** A sanctioned payer, a ledger
+  that failed while the sale went on, a screening that could not answer: the
+  library reports each as an event and logs nothing itself; the module writes
+  them to the `x402_pay` channel with their details (address, reason,
+  network, transaction), so dblog or syslog keep them.
+- **Gas is capped.** Our own facilitator refuses a sale whose gas would cost
+  more than **Most gas per sale** (0.05 by default).
+- **The log is reconciled against the chain.** A settlement sent but not
+  mined in time is logged `failed` with its transaction, and cron settles
+  the doubt from the receipt; once a week it checks that each settled sale
+  moved its amount on chain. `drush x402:reconcile` does both now.
+- **Refused payments are limited per visitor** (30 an hour by default, then
+  429), as a setting.
+- **The drupal.org pipeline passes:** phpcs, phpstan and cspell.
+
+
+## What it does
 
 - **The gate** (`x402_pay.gate`): the caller sets price and `payTo` per
   request; unpaid requests get a 402 with the payment
@@ -31,6 +80,9 @@ Drupal charges in USDC on **Arc** (and **Solana**) over HTTP 402 (x402):
   or dropped. Once a week, cron checks that each settled sale of the last
   8 days moved its amount to its payTo on chain; `drush x402:reconcile`
   does both now. EVM only, recent rows only (nodes forget old ones).
+- **Sanctions screening**: each payer is checked against OFAC's SDN list
+  (see *What is new*); a listed payer is refused with the facilitator never
+  asked, and the refusal is logged.
 - **Refused payments**: 30 per visitor (IP) an hour by default, then 429.
   Change it at the settings form (**Refused payments per visitor**) or in
   `refused_payments`; 0 is no limit. Asking the price is never limited.
@@ -152,10 +204,12 @@ with (a viem buyer and the vector generator) are gone, by rule: no
 dependency tree we did not read gets near a wallet key. See
 [Ombú's README](https://github.com/quebracho-digital/ombu#no-nodejs-on-purpose).
 
-The library comes from Packagist (`quebracho/x402` `^0.2`). It ships
+The library comes from Packagist (`quebracho/x402` `^0.4`). It ships
 testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
 The gaps this module found in the library while moving onto it were reported
-upstream and are closed in `quebracho/x402` 0.2.
+upstream and are closed in `quebracho/x402` 0.2 and later.
+
+## Upgrading from 1.0.0-beta2
 
 **Code written for 1.0.0-beta2 keeps working, deprecated.** The classes the
 library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an
@@ -170,6 +224,11 @@ library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an
 
 `Solana::pay()` is gone: `Quebracho\X402\SolanaExact::pay()` builds the
 payment, and `Buyer::pay()` still buys a whole call.
+
+After updating run `drush cr`; the new services
+(`x402_pay.ofac`, `x402_pay.library_log`) are picked up on rebuild.
+
+## Networks and keys
 
 Arc mainnet (`eip155:5042`) and testnet (`eip155:5042002`). Wallet keys and
 API keys go through the `key` module from an environment variable, never in
