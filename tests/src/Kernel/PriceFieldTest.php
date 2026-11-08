@@ -195,6 +195,35 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * A payer on OFAC's list is refused before the facilitator is asked.
+   *
+   * The list is the snapshot cron writes: the shipped one does not name the
+   * test key.
+   */
+  public function testSanctionedPayerIsRefusedBeforeTheFacilitator(): void {
+    $payer = (new Signer('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'))->address();
+    $file = $this->container->get('x402_pay.ofac')->snapshot();
+    mkdir(dirname($file), 0750, TRUE);
+    file_put_contents($file, json_encode([
+      'source' => 'test',
+      'published' => '2999-01-01T00:00:00Z',
+      'addresses' => ['ETH' => [$payer]],
+    ]));
+
+    $facilitator = $this->createMock(Facilitator::class);
+    $facilitator->expects($this->never())->method('verify');
+    $facilitator->expects($this->never())->method('settle');
+    $this->useFacilitator($facilitator);
+
+    $accepted = X402PriceItem::find($this->entity)->requirements();
+    $response = $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => $this->payment($accepted)]);
+
+    $this->assertSame(402, $response->getStatusCode());
+    $this->assertStringContainsString('address_sanctioned', $response->headers->get(PaymentHeaders::REQUIRED) . $response->getContent());
+    $this->assertFalse(\Drupal::database()->select('x402_pay_log', 'l')->fields('l')->execute()->fetchAssoc(), 'A refused payment is not a sale.');
+  }
+
+  /**
    * What is sold is what the site builder chose.
    */
   public function testWhatIsSoldIsWhatTheSiteBuilderChose(): void {

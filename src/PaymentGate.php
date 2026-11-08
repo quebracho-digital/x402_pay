@@ -15,6 +15,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Quebracho\X402\EvmExact;
 use Quebracho\X402\FacilitatorException;
+use Quebracho\X402\OfacSdn;
 use Quebracho\X402\PaymentHeaders;
 use Quebracho\X402\Settlement;
 use Quebracho\X402\Signer;
@@ -66,6 +67,7 @@ class PaymentGate {
     private readonly ?Settings $settings = NULL,
     private readonly ?FloodInterface $flood = NULL,
     private readonly ?ConfigFactoryInterface $configFactory = NULL,
+    private readonly ?OfacSdn $ofac = NULL,
   ) {}
 
   /**
@@ -217,6 +219,8 @@ class PaymentGate {
       events: $this->eventDispatcher,
       resource: fn() => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
       verify: $verify,
+      // NULL: the list that ships with the library.
+      ofac: $this->ofac,
     );
     $response = $this->foundationFactory->createResponse($middleware->process($this->psrFactory->createRequest($request), $inner));
 

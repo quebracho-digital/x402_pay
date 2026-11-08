@@ -37,7 +37,32 @@ services:
     class: Drupal\x402_pay\PaymentLog
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory']
+    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory', '@x402_pay.ofac_sdn']
+  # OFAC's SDN list: cron downloads it daily, every sale reads the newer of
+  # that file and the list shipped with quebracho/x402.
+  x402_pay.ofac_sync:
+    class: Quebracho\X402\OfacSdnSync
+    arguments: ['@http_client', '@x402_pay.psr17']
+  x402_pay.ofac:
+    class: Drupal\x402_pay\Ofac
+    arguments: ['@state', '@datetime.time', '@logger.channel.x402_pay', '@x402_pay.ofac_sync', '@settings', '%site.path%']
+  Drupal\x402_pay\Ofac: '@x402_pay.ofac'
+  x402_pay.ofac_sdn:
+    class: Quebracho\X402\OfacSdn
+    factory: ['@x402_pay.ofac', 'list']
+  # The library's events (a sanctioned payer, a ledger that failed, a screening
+  # that could not answer) as lines of the x402_pay log channel.
+  x402_pay.context_logger:
+    class: Drupal\x402_pay\ContextLogger
+    arguments: ['@logger.channel.x402_pay']
+  x402_pay.library_log:
+    class: Quebracho\X402\PaymentLog
+    arguments: ['@x402_pay.context_logger']
+  x402_pay.library_event_logger:
+    class: Drupal\x402_pay\EventSubscriber\LibraryEventLogger
+    arguments: ['@x402_pay.library_log']
+    tags:
+      - { name: event_subscriber }
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']

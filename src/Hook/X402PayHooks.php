@@ -17,6 +17,7 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\field\FieldConfigInterface;
 use Drupal\x402_pay\ClaimStore;
 use Drupal\x402_pay\Delivery;
+use Drupal\x402_pay\Ofac;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Reconciler;
 use Drupal\x402_pay\Sweeper;
@@ -34,6 +35,7 @@ class X402PayHooks {
     private readonly RouteMatchInterface $routeMatch,
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly Reconciler $reconciler,
+    private readonly Ofac $ofac,
   ) {}
 
   /**
@@ -75,6 +77,7 @@ class X402PayHooks {
     $this->sweeper->cron();
     $this->claims->prune();
     $this->reconciler->cron();
+    $this->ofac->refresh();
   }
 
   /**
