@@ -58,7 +58,7 @@ final class LibraryEventLogTest extends KernelTestBase {
    * The status report shows how old the sanctions list in use is.
    */
   public function testTheStatusReportShowsTheListAge(): void {
-    $requirements = $this->container->get(X402PayHooks::class)->runtimeRequirements('runtime');
+    $requirements = $this->container->get(X402PayHooks::class)->runtimeRequirements();
     $this->assertArrayHasKey('x402_pay_ofac', $requirements);
     $this->assertStringContainsString('published', (string) $requirements['x402_pay_ofac']['value']);
   }

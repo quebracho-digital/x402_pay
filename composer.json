@@ -9,7 +9,7 @@
     "ext-gmp": "*",
     "ext-sodium": "*",
     "league/html-to-markdown": "^5.1",
-    "quebracho/x402": "^0.4",
+    "quebracho/x402": "^0.5",
     "symfony/psr-http-message-bridge": "^6.4 || ^7.0",
     "guzzlehttp/psr7": "^2.6"
   },

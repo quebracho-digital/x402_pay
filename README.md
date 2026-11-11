@@ -11,17 +11,29 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   [Ombú](https://github.com/quebracho-digital/ombu), the agent mall.
 - **Built on:** the MIT library
   [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
-  `^0.4` (protocol, signatures, facilitators, OFAC screening); this module
+  `^0.5` (protocol, signatures, facilitators, OFAC screening, the stop
+  switch); this module
   is what Drupal adds around it. PHP only: no Node.js, no npm.
 - **Install:** `composer require drupal/x402_pay`, enable it, set a seller key
   (Key module) and a network at `/admin/config/services/x402`.
 - **Try it:** `BUYER_PRIVATE_KEY=0x… drush x402:buy <url> --max=0.05` pays a
-  402; `drush x402:reconcile` checks the log against the chain.
+  402; `drush x402:reconcile` checks the log against the chain;
+  `drush x402:stop on` pauses every payment at once.
 - **Decisions and limits:** [DECISIONS.md](DECISIONS.md). **Plan:** Ombú's
   [ROADMAP](https://github.com/quebracho-digital/ombu/blob/main/ROADMAP.md).
 
 ## What is new in this release
 
+- **A stop switch pauses every payment at once.** `drush x402:stop on "why"`
+  or the **Pause payments** tab of the settings (its own permission, *Pause
+  and resume x402 payments*): a paid request is answered `503
+  payments_paused` before anything is verified, claimed or charged, and the
+  site buys nothing. Two switches, either of which pauses: the library's flag
+  file and the module's own, in the database. See [The stop
+  switch](#the-stop-switch).
+- **Runs on `quebracho/x402` 0.5** (it needs `^0.5` for the stop switch). The
+  sale and the buyer are built with the library's `Seller` and `Buyer`.
+  Nothing else changes for a site: no update hook, `drush cr` after updating.
 - **Runs on `quebracho/x402` 0.4.** Signing, headers, networks, the Circle,
   HTTP and chain facilitators, the buyer and the sale middleware now live in
   the library; the module keeps the Drupal side (log, claims, settings,
@@ -223,6 +235,73 @@ testnets only; this module adds Arc and Solana mainnet (`ModuleNetworks`).
 The gaps this module found in the library while moving onto it were reported
 upstream and are closed in `quebracho/x402` 0.2 and later.
 
+## The stop switch
+
+For when something looks wrong (a facilitator incident, a key you no longer
+trust, a price set by mistake) and the money has to stop before you know why.
+
+```bash
+drush x402:stop on "facilitator incident"   # pause
+drush x402:stop status                      # exits 1 while paused, 0 while running
+drush x402:stop off                         # resume
+```
+
+Or the **Pause payments** tab at `/admin/config/services/x402/stop`. It has
+its own permission, **Pause and resume x402 payments**: whoever is on call
+can stop the money without being able to change where it goes, and the
+settings' permission does not grant it.
+
+**Two switches, either of which pauses.** Pausing sets the first, then the
+second; resuming clears both; each reports on its own.
+
+| Switch | Where | What it is for |
+|---|---|---|
+| The library's (`Quebracho\X402\Stop`) | a flag file, `x402_pay/stop/paused` under the private files directory (the public one when the site has none) | Read by the library's own sale and paying client, again just before they settle or sign. Needs no database and no Drupal: `touch` on the file pauses. |
+| The module's | a value in Drupal's state | Every web head that shares the database sees it, where a file on one host stops that host only; and it works when the files directory cannot be written to. |
+
+If one cannot be set (the flag's directory belongs to another system user,
+the database is down), the other still pauses and the command says which one
+failed. A switch that cannot be read counts as engaged: unsure, the site does
+not sell.
+
+**While paused:** a paid request gets `503` with
+`{"error": "payments_paused"}` and `Retry-After: 300`, before the facilitator
+is asked; nothing is claimed, run or logged, and it does not count against
+the visitor's limit of refused payments. `drush x402:buy` and the deprecated
+`Buyer` sign nothing. The status report shows the pause and which switch
+holds it.
+
+**Not paused:** free responses, the sweep to the cold wallet and the
+reconciliation of the log (they move nothing a buyer pays). **Cannot be
+recalled:** a payment already signed, a settlement already sent.
+
+**Run Drush as the web server's user** (`sudo -u www-data drush x402:stop
+on`): the library refuses a flag file that is not its own, so a flag set by
+one system user cannot be cleared by another. The command then says the
+library's switch is still engaged; clear it from the tab, or as that user.
+
+**Several web heads:** the module's switch covers them all through the
+database. For the flag file to cover them too, point it at a path they
+share, in `settings.php`:
+
+```php
+$settings['x402_pay_stop_file'] = '/mnt/shared/x402/paused';   // absolute, in a directory only PHP's user can write to
+```
+
+**Logs and events.** Every pause and resume is a line in the `x402_pay` log
+channel (a warning and a notice: the user, the reason, and any switch that
+could not be set or cleared) and a `Drupal\x402_pay\Event\StopEvent`
+(`pausing`, `engaged`, `layers`, `failed`, `why`, `uid`): subscribe to it to
+tell whoever is on call. A listener that fails is logged and changes nothing.
+A sale refused while paused is not logged, one by one: under load that would
+be a line per request; the buyer gets the 503, and the status report says the
+site is paused.
+
+In your own code the switch is the `x402_pay.stop` service
+(`Drupal\x402_pay\Stop`): `engaged()`, `layers()`, `engage($why)`,
+`release()`, and `library()` for a `Quebracho\X402\Stop` to hand to the
+library's `Seller` or `Buyer`.
+
 ## Upgrading from 1.0.0-beta2
 
 **Code written for 1.0.0-beta2 keeps working, deprecated.** The classes the
@@ -233,7 +312,7 @@ library replaced stay in `Drupal\x402_pay` until 2.0.0 and raise an
 |---|---|
 | `Signer`, `Eip712`, `PaymentHeaders`, `Transfer`, `SolanaKey`, `Rpc`, `SellerProof`, `Solana`, `InvalidPaymentException`, `FacilitatorException` | The same name in `Quebracho\X402` (the old name is an alias of it) |
 | `Networks` | `Quebracho\X402\Networks::find($network)` in place of `Networks::ALL[$network]` |
-| `Buyer` | `Quebracho\X402\PayingHttpClient` with a `Budget` |
+| `Buyer` | `Quebracho\X402\Buyer::with($schemes, $budget)->stop($stop)->http($client)`; hand it `\Drupal::service('x402_pay.stop')->library()` so the stop switch reaches it |
 | `CircleFacilitator`, `RemoteFacilitator`, `ChainFacilitator` and their services | The `x402_pay.facilitators` service |
 
 `Solana::pay()` is gone: `Quebracho\X402\SolanaExact::pay()` builds the

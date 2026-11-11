@@ -36,3 +36,11 @@ x402_pay.solana_transaction:
     # Public: it builds bytes for the visitor's own wallet to sign; flood
     # limited, since each asks the node for a blockhash.
     _access: 'TRUE'
+
+x402_pay.stop:
+  path: '/admin/config/services/x402/stop'
+  defaults:
+    _form: '\Drupal\x402_pay\Form\StopForm'
+    _title: 'Pause x402 payments'
+  requirements:
+    _permission: 'pause x402 payments'

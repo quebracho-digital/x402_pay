@@ -32,7 +32,12 @@ class Buyer {
   public function __construct(
     private readonly ClientInterface $httpClient,
     private readonly LibrarySigner|LibrarySolanaKey $wallet,
-  ) {}
+    private ?Stop $stop = NULL,
+  ) {
+    // Built by hand wherever it is used: the site's stop switch is found
+    // here, so that pausing payments stops this buyer too.
+    $this->stop ??= \Drupal::hasService('x402_pay.stop') ? \Drupal::service('x402_pay.stop') : NULL;
+  }
 
   /**
    * The buyer's address.
@@ -57,9 +62,13 @@ class Buyer {
    *   network, requirements.
    *
    * @throws \RuntimeException
-   *   The first answer is not a 402 with requirements.
+   *   The first answer is not a 402 with requirements, or the site's payments
+   *   are paused (the message is payments_paused; nothing was asked or signed).
    */
   public function pay(string $url, ?array $input = NULL, ?callable $approve = NULL): array {
+    if ($this->stop?->engaged()) {
+      throw new \RuntimeException(Stop::REASON);
+    }
     $call = fn(array $headers = [], int $timeout = 30) => $this->httpClient->request($input === NULL ? 'GET' : 'POST', $url, [
       'http_errors' => FALSE,
       'timeout' => $timeout,
@@ -81,6 +90,10 @@ class Buyer {
       $approve($req);
     }
 
+    // Paused while the seller answered: nothing is signed.
+    if ($this->stop?->engaged()) {
+      throw new \RuntimeException(Stop::REASON);
+    }
     $payment = ($solana ? $this->solana($req['network']) : new EvmExact($this->wallet))->pay($required, $req);
 
     // The same call, paid. It waits as long as the payment can settle: a

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\x402_pay\Drush\Commands;
 
 use Drupal\x402_pay\Reconciler;
+use Drupal\x402_pay\Stop;
 use Drupal\x402_pay\Sweeper;
 use Drush\Attributes as CLI;
 use Drush\Commands\AutowireTrait;
@@ -12,9 +13,9 @@ use Drush\Commands\DrushCommands;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
 use Quebracho\X402\Budget;
+use Quebracho\X402\Buyer;
 use Quebracho\X402\EvmExact;
 use Quebracho\X402\Networks;
-use Quebracho\X402\PayingHttpClient;
 use Quebracho\X402\Signer;
 use Quebracho\X402\SolanaExact;
 use Quebracho\X402\SolanaKey;
@@ -34,6 +35,8 @@ final class X402Commands extends DrushCommands {
     private readonly HttpFactory $psr17,
     #[Autowire(service: 'x402_pay.reconciler')]
     private readonly Reconciler $reconciler,
+    #[Autowire(service: 'x402_pay.stop')]
+    private readonly Stop $stop,
   ) {
     parent::__construct();
   }
@@ -80,6 +83,65 @@ final class X402Commands extends DrushCommands {
   }
 
   /**
+   * Pauses or resumes every x402 payment of the site, or says where it is.
+   *
+   * Two switches, either of which pauses: the library's flag file first, then
+   * the module's value in the database. Run it as the system user PHP runs
+   * as on the web (e.g. sudo -u www-data): a flag file set by another user
+   * cannot be cleared by this one, and the command says so.
+   */
+  #[CLI\Command(name: 'x402:stop')]
+  #[CLI\Argument(name: 'action', description: 'on, off or status.')]
+  #[CLI\Argument(name: 'why', description: 'Why (kept for whoever reads the status; never sent to buyers).')]
+  #[CLI\Usage(name: 'drush x402:stop on "facilitator incident"', description: 'Pauses: nothing is sold or bought.')]
+  #[CLI\Usage(name: 'drush x402:stop off', description: 'Resumes.')]
+  #[CLI\Usage(name: 'drush x402:stop status', description: 'Exits 1 while paused, 0 while running: for a monitor.')]
+  public function stop(string $action = 'status', string $why = ''): int {
+    $say = function (array $failed, string $verb): void {
+      foreach (array_filter($failed) as $layer => $error) {
+        $this->logger()->error("The $layer switch $verb: $error");
+      }
+    };
+    switch ($action) {
+      case 'on':
+        $say($this->stop->engage($why), 'could not be set');
+        if (!$this->stop->engaged()) {
+          $this->logger()->error('Payments are NOT paused: neither switch could be set.');
+          return self::EXIT_FAILURE;
+        }
+        $this->logger()->warning('Payments are paused: nothing is sold or bought until "drush x402:stop off".');
+        return self::EXIT_SUCCESS;
+
+      case 'off':
+        $say($this->stop->release(), 'is still engaged');
+        if ($this->stop->engaged()) {
+          $this->logger()->error('Payments are still paused.');
+          return self::EXIT_FAILURE;
+        }
+        $this->logger()->success('Payments resumed.');
+        return self::EXIT_SUCCESS;
+
+      case 'status':
+        $layers = $this->stop->layers();
+        $note = $this->stop->note();
+        $this->io()->writeln(json_encode($layers + [
+          'since' => $note ? date('c', $note['time']) : NULL,
+          'why' => $note['why'] ?? NULL,
+          'uid' => $note['uid'] ?? NULL,
+        ], JSON_UNESCAPED_SLASHES));
+        if (!in_array(TRUE, $layers, TRUE)) {
+          $this->io()->writeln('Payments are running.');
+          return self::EXIT_SUCCESS;
+        }
+        $this->logger()->warning('Payments are PAUSED.');
+        // Not an error of the command: the answer, for a script that asks.
+        return self::EXIT_FAILURE;
+    }
+    $this->logger()->error("Unknown action \"$action\": on, off or status.");
+    return self::EXIT_FAILURE;
+  }
+
+  /**
    * Buys an x402 call: the buyer's key from BUYER_PRIVATE_KEY.
    *
    * An EVM key (0x and 64 hex) pays on EVM, a Solana key (base58 or a JSON
@@ -91,6 +153,10 @@ final class X402Commands extends DrushCommands {
   #[CLI\Option(name: 'max', description: 'The most it may pay, in USDC.')]
   #[CLI\Usage(name: 'BUYER_PRIVATE_KEY=0x… drush x402:buy https://example.com/x402/node/2/full --max=0.05', description: 'Pays a page, if it costs at most 5 cents.')]
   public function buy(string $url, array $options = ['input' => NULL, 'max' => '0.05']): void {
+    // Either switch: the library's client below only knows its own.
+    if ($this->stop->engaged()) {
+      throw new \RuntimeException('Payments are paused (drush x402:stop status): nothing was asked or signed.');
+    }
     $key = getenv('BUYER_PRIVATE_KEY') ?: throw new \RuntimeException('Set BUYER_PRIVATE_KEY.');
     $input = $options['input'] === NULL ? NULL : (json_decode($options['input'], TRUE) ?? throw new \InvalidArgumentException('--input is not JSON.'));
     $key = trim($key);
@@ -103,11 +169,16 @@ final class X402Commands extends DrushCommands {
     $paid = NULL;
     // The paid retry waits as long as the payment can settle: a buyer that
     // hangs up first may be charged for an answer it never reads.
-    // The library's PayingHttpClient has no timeout of its own.
-    $buyer = new PayingHttpClient(new Client(['timeout' => 120]), $schemes, $budget, function (array $req, array $receipt) use (&$paid) {
-      $paid = [$req, $receipt];
-      $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));
-    });
+    // The library's paying client has no timeout of its own.
+    $buyer = Buyer::with($schemes, $budget)
+      ->onPaid(function (array $req, array $receipt) use (&$paid) {
+        $paid = [$req, $receipt];
+        $this->io()->writeln(sprintf('402 → %s atomic units to %s on %s', $req['amount'], $req['payTo'], $req['network']));
+      })
+      ->onRefused(fn(array $req, string $reason) => $this->io()->writeln("not paid: $reason"))
+      // Paused while the seller answered: the library signs nothing.
+      ->stop($this->stop->library())
+      ->http(new Client(['timeout' => 120]));
     $request = $this->psr17->createRequest($input === NULL ? 'GET' : 'POST', $url)->withHeader('Accept', '*/*');
     if ($input !== NULL) {
       $request = $request->withHeader('Content-Type', 'application/json')

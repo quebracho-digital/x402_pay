@@ -7,3 +7,10 @@ parameters:
 			message: '#^Call to deprecated method __construct\(\) of class Quebracho\\X402\\HttpFacilitator#'
 			count: 1
 			path: src/Facilitators.php
+		# The deprecated Buyer is built by hand by its callers (new Buyer(...)),
+		# so nothing can inject the stop switch: it looks the service up, or a
+		# paused site would go on buying through it.
+		-
+			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
+			count: 2
+			path: src/Buyer.php

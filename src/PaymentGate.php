@@ -17,10 +17,10 @@ use Quebracho\X402\EvmExact;
 use Quebracho\X402\FacilitatorException;
 use Quebracho\X402\OfacSdn;
 use Quebracho\X402\PaymentHeaders;
+use Quebracho\X402\Seller;
 use Quebracho\X402\Settlement;
 use Quebracho\X402\Signer;
 use Quebracho\X402\SolanaExact;
-use Quebracho\X402\X402Middleware;
 use Symfony\Bridge\PsrHttpMessage\HttpFoundationFactoryInterface;
 use Symfony\Bridge\PsrHttpMessage\HttpMessageFactoryInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -34,6 +34,7 @@ use Symfony\Component\HttpFoundation\Response;
  * a 2xx, the receipt header) is the library's X402Middleware. This class is
  * what is Drupal's around it: the price and payTo of this request, the
  * facilitator the site configured, the payment log and event, the deadline,
+ * the stop switch,
  * Server-Timing, and the bridge between Symfony and PSR-7 messages.
  *
  * The flow: verify, claim, run the handler, 2xx? settle, hand over the body
@@ -68,6 +69,7 @@ class PaymentGate {
     private readonly ?FloodInterface $flood = NULL,
     private readonly ?ConfigFactoryInterface $configFactory = NULL,
     private readonly ?OfacSdn $ofac = NULL,
+    private readonly ?Stop $stop = NULL,
   ) {}
 
   /**
@@ -88,6 +90,12 @@ class PaymentGate {
    *   Produces the paid response. Runs only after the payment verified.
    */
   public function handle(Request $request, array $requirements, array $resource, ?Signer $seller, callable $handler): Response {
+    // Paused by hand (Stop): nothing is quoted, verified, claimed or charged.
+    // Asked here for both switches, before the facilitator is even built; the
+    // library asks its own again below, just before it settles.
+    if ($this->stop?->engaged()) {
+      return new JsonResponse(['error' => Stop::REASON], 503, ['Retry-After' => '300']);
+    }
     $paying = $request->headers->has(PaymentHeaders::SIGNATURE);
     $limit = (int) ($this->configFactory?->get('x402_pay.settings')->get('refused_payments') ?? self::REFUSALS);
     if ($paying && $this->flood && $limit > 0 && !$this->flood->isAllowed('x402_pay.refused_payment', $limit, self::WINDOW)) {
@@ -211,18 +219,19 @@ class PaymentGate {
 
     };
 
-    $middleware = new X402Middleware(
-      schemes: [new EvmExact(), new SolanaExact()],
-      price: fn() => [$requirements],
-      claim: $this->claims->__invoke(...),
-      responses: $this->psr17,
-      streams: $this->psr17,
-      settle: $settle,
-      events: $this->eventDispatcher,
-      resource: fn() => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
-      verify: $verify,
-      // NULL: the list that ships with the library.
-      ofac: $this->ofac,
+    // The library's sale, built by name (Seller): our claims table, our
+    // verify and settle around the facilitator, the list of sanctioned
+    // addresses cron keeps fresh, and the library's own stop switch.
+    $seller = Seller::with([new EvmExact(), new SolanaExact()], $settle, $this->psr17, $this->psr17)
+      ->claims($this->claims->__invoke(...))
+      ->verify($verify);
+    $seller = $this->eventDispatcher ? $seller->events($this->eventDispatcher) : $seller;
+    // Without it: the list that ships with the library.
+    $seller = $this->ofac ? $seller->ofac($this->ofac) : $seller;
+    $seller = $this->stop ? $seller->stop($this->stop->library()) : $seller;
+    $middleware = $seller->http(
+      fn() => [$requirements],
+      fn() => array_intersect_key($resource, array_flip(['url', 'description', 'mimeType'])),
     );
     $response = $this->foundationFactory->createResponse($middleware->process($this->psrFactory->createRequest($request), $inner));
 

@@ -1,0 +1,9 @@
+x402_pay.settings:
+  title: 'Settings'
+  route_name: x402_pay.settings
+  base_route: x402_pay.settings
+x402_pay.stop:
+  title: 'Pause payments'
+  route_name: x402_pay.stop
+  base_route: x402_pay.settings
+  weight: 10

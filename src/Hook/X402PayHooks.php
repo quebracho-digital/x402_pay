@@ -21,6 +21,7 @@ use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\Ofac;
 use Drupal\x402_pay\Plugin\Field\FieldType\X402PriceItem;
 use Drupal\x402_pay\Reconciler;
+use Drupal\x402_pay\Stop;
 use Drupal\x402_pay\Sweeper;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -39,6 +40,7 @@ class X402PayHooks {
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly Reconciler $reconciler,
     private readonly Ofac $ofac,
+    private readonly Stop $stop,
     #[Autowire(service: 'logger.channel.x402_pay')]
     private readonly LoggerInterface $logger,
   ) {}
@@ -100,7 +102,9 @@ class X402PayHooks {
   }
 
   /**
-   * Shows how old the sanctions list in use is; warns after a week.
+   * Shows whether payments are paused, and how old the sanctions list is.
+   *
+   * The list warns after a week.
    *
    * A site whose cron is broken keeps screening against a list that only
    * gets older, and nothing else would say so.
@@ -109,15 +113,21 @@ class X402PayHooks {
    *   The status report line.
    */
   #[Hook('runtime_requirements')]
-  public function runtimeRequirements(string $phase): array {
-    if ($phase !== 'runtime') {
-      return [];
-    }
+  public function runtimeRequirements(): array {
     $age = $this->ofac->age();
     $stale = $age > 7 * 86400;
     $ok = enum_exists(RequirementSeverity::class) ? RequirementSeverity::OK : 0;
     $warning = enum_exists(RequirementSeverity::class) ? RequirementSeverity::Warning : 1;
+    $layers = $this->stop->layers();
+    $paused = array_keys(array_filter($layers));
     return [
+      // A site left paused sells nothing and says so nowhere else.
+      'x402_pay_stop' => [
+        'title' => $this->t('x402 Pay payments'),
+        'value' => $paused ? $this->t('PAUSED (@layers switch)', ['@layers' => implode(' and ', $paused)]) : $this->t('Running'),
+        'description' => $paused ? $this->t('Nothing is sold or bought until the stop switch is released: <code>drush x402:stop off</code>, or the Pause payments tab of the x402 Pay settings.') : '',
+        'severity' => $paused ? $warning : $ok,
+      ],
       'x402_pay_ofac' => [
         'title' => $this->t('x402 Pay sanctions list'),
         'value' => $this->t('OFAC SDN list published @date', ['@date' => $this->ofac->list()->published()]),

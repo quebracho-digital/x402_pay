@@ -26,6 +26,65 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
+## 2026-11-11 (unreleased)
+
+### A stop switch, twice: the library's flag file and the module's state
+
+Decided by Leo (2026-11-11), translated from his Spanish: move the module to
+the library's 0.5 "in all its capacity, including the global stop as a
+service and a Drush command"; "it should be a double stop: first put the
+library in stop mode, then the module, as a double protection?"; "create the
+permissions it needs, such as the global stop one".
+
+- **What:** `x402_pay.stop` (`Drupal\x402_pay\Stop`) holds two switches and
+  is paused when either is: the library's `Quebracho\X402\Stop` (a flag
+  file) and a value in Drupal's state. `engage()` sets the library's first,
+  then the module's; `release()` clears both; each returns its own failure.
+  `PaymentGate` asks the service before anything else and hands the
+  library's switch to the library's sale, which asks it again before it
+  settles. `drush x402:stop on|off|status`, a **Pause payments** tab, the
+  permission *Pause and resume x402 payments*, and a status report line.
+- **Why two:** they fail apart. The file needs no database and can be set
+  with `touch`, but stops one host and cannot be set where another system
+  user owns its directory. The state reaches every web head, but needs the
+  database. A test (`StopSwitchTest`) shows the library stopping a sale with
+  the module's check answering "running", so the second lock is not for show.
+- **Fail closed:** a switch that cannot be read counts as engaged.
+- **Logged and told:** each pause and resume writes a line to the `x402_pay`
+  channel and dispatches `StopEvent`; a listener that throws is logged and
+  does not undo the pause. Sales refused while paused are not logged one by
+  one.
+- **Its own permission**, not the settings': pausing is for whoever is on
+  call, and must not come with the right to change `payTo` or the sweep.
+- **The reason stays in the database.** The flag file holds a date only: it
+  may sit under the public files directory.
+- **Not paused:** free responses, the sweep and the reconciler. Stopping the
+  sweep would leave money on hot wallets during an incident, which is when
+  it should leave them.
+- **Limits:** a payment already signed or a settlement already sent is not
+  recalled. A flag file set by one system user cannot be cleared by another
+  (the library refuses a file that is not its own): the command reports it,
+  and the README says to run Drush as the web server's user. Several web
+  heads share the flag only through `$settings['x402_pay_stop_file']`.
+- **Rejected:** one switch in config (exported, deployed, and a config
+  import would silently resume a paused site); the library's switch alone
+  (one host, no database, but also no way to pause from a second web head).
+
+### What of the library's 0.5 the module uses, and what it does not
+
+- **Uses:** `Stop`; `Seller` and `Buyer` to build the sale (`PaymentGate`)
+  and the paying client (`drush x402:buy`) by name; `Settlement` for the
+  names it already read there. `quebracho/x402` is now `^0.5`.
+- **Does not, and why:** `PriceList` and `Job\*` are for MCP tools, and the
+  module prices entities through its price field and `PriceEvent`.
+  `SensitiveRules` says what a payment ledger must not keep, and the module
+  has a claims table, not a ledger that replays answers. `Facilitators::from`
+  picks one facilitator from one setting; the module picks per network, with
+  keys from the Key module and a lock around the gas wallet. `Screening`
+  (the site's own allow and deny lists, a sanctions API) would be a new
+  feature with its own settings: not built, written here so it is not
+  mistaken for done.
+
 ## 2026-10-28 (unreleased)
 
 ### The protocol is a library; the module is Drupal

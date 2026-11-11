@@ -36,9 +36,15 @@ services:
   x402_pay.log:
     class: Drupal\x402_pay\PaymentLog
     arguments: ['@database', '@datetime.time', '@logger.channel.x402_pay']
+  # The stop switch (drush x402:stop, /admin/config/services/x402/stop): the
+  # library's flag file and the module's own, in the database. Either pauses.
+  x402_pay.stop:
+    class: Drupal\x402_pay\Stop
+    arguments: ['@state', '@datetime.time', '@logger.channel.x402_pay', '@settings', '%site.path%', '@current_user', '@event_dispatcher']
+  Drupal\x402_pay\Stop: '@x402_pay.stop'
   x402_pay.gate:
     class: Drupal\x402_pay\PaymentGate
-    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory', '@x402_pay.ofac_sdn']
+    arguments: ['@x402_pay.facilitators', '@x402_pay.log', '@x402_pay.claims', '@x402_pay.psr17', '@x402_pay.psr_http_factory', '@x402_pay.http_foundation_factory', '@event_dispatcher', '@settings', '@flood', '@config.factory', '@x402_pay.ofac_sdn', '@x402_pay.stop']
   # OFAC's SDN list: cron downloads it daily, every sale reads the newer of
   # that file and the list shipped with quebracho/x402.
   x402_pay.ofac_sync:
