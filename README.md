@@ -10,7 +10,7 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   2xx response** and lands in a payment log. Live in
   [Ombú](https://github.com/quebracho-digital/ombu), the agent mall.
 - **Built on:** the MIT library
-  [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
+  [`quebracho/x402`](https://github.com/quebracho-digital/x402)
   `^0.5.1` (protocol, signatures, facilitators, OFAC screening, the stop
   switch); this module
   is what Drupal adds around it. PHP only: no Node.js, no npm.
@@ -31,16 +31,17 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   site buys nothing. Two switches, either of which pauses: the library's flag
   file and the module's own, in the database. See [The stop
   switch](#the-stop-switch).
-- **Needs `quebracho/x402` 0.5.1.** Before it, a payment whose `nonce` or
-  payer ended in a newline made a paid URL answer 500: anybody could cause
-  it, with no funds. Nothing was charged or delivered. The library now reads
-  every field of a payment in one spelling (`Quebracho\X402\Field`), and so
-  do the module's own checks (the payment log, the reconciliation, the sweep's
-  cold wallet, the price field's address). No update hook, `drush cr` after
-  updating.
-- **Runs on `quebracho/x402` 0.5** (it needs `^0.5` for the stop switch). The
-  sale and the buyer are built with the library's `Seller` and `Buyer`.
-  Nothing else changes for a site: no update hook, `drush cr` after updating.
+- **A malformed payment is refused, not an error.** A payment whose `nonce`
+  or payer ended in a newline made a paid URL answer 500: anybody could cause
+  it, with no funds. Nothing was charged or delivered. It is now a 402
+  `invalid_payload`. The library reads every field of a payment in one
+  spelling (`Quebracho\X402\Field`), and so do the module's own checks (the
+  payment log, the reconciliation, the sweep's cold wallet, the price field's
+  address).
+- **Runs on `quebracho/x402` `^0.5.1`**: 0.5 for the stop switch, 0.5.1 for
+  the fix above. The sale and the buyer are built with the library's `Seller`
+  and `Buyer`. Nothing else changes for a site: no update hook, `drush cr`
+  after updating.
 - **Runs on `quebracho/x402` 0.4.** Signing, headers, networks, the Circle,
   HTTP and chain facilitators, the buyer and the sale middleware now live in
   the library; the module keeps the Drupal side (log, claims, settings,
@@ -80,7 +81,7 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   requirements; verify and settle **only on a 2xx response**; a payment log
   (route, amount, payer, tx hash). The protocol itself (402, signatures,
   claiming a payment once, settling, headers) is the MIT library
-  [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
+  [`quebracho/x402`](https://github.com/quebracho-digital/x402)
   (`Quebracho\X402\X402Middleware`); the gate is what Drupal adds around it.
 - **Facilitators** (`/admin/config/services/x402`), per network:
   - **Circle's**: the keyless trial (each sale signed by the seller key) or a
@@ -341,4 +342,4 @@ What was chosen, what was not and why: [DECISIONS.md](DECISIONS.md).
 ## Licence
 
 `GPL-2.0-or-later`: [LICENSE.txt](LICENSE.txt). It depends on the MIT-licensed
-[`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp), which a GPL module may include.
+[`quebracho/x402`](https://github.com/quebracho-digital/x402), which a GPL module may include.
