@@ -11,7 +11,7 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   [Ombú](https://github.com/quebracho-digital/ombu), the agent mall.
 - **Built on:** the MIT library
   [`quebracho/x402`](https://github.com/quebracho-digital/quebracho-x402-mcp)
-  `^0.5` (protocol, signatures, facilitators, OFAC screening, the stop
+  `^0.5.1` (protocol, signatures, facilitators, OFAC screening, the stop
   switch); this module
   is what Drupal adds around it. PHP only: no Node.js, no npm.
 - **Install:** `composer require drupal/x402_pay`, enable it, set a seller key
@@ -31,6 +31,13 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   site buys nothing. Two switches, either of which pauses: the library's flag
   file and the module's own, in the database. See [The stop
   switch](#the-stop-switch).
+- **Needs `quebracho/x402` 0.5.1.** Before it, a payment whose `nonce` or
+  payer ended in a newline made a paid URL answer 500: anybody could cause
+  it, with no funds. Nothing was charged or delivered. The library now reads
+  every field of a payment in one spelling (`Quebracho\X402\Field`), and so
+  do the module's own checks (the payment log, the reconciliation, the sweep's
+  cold wallet, the price field's address). No update hook, `drush cr` after
+  updating.
 - **Runs on `quebracho/x402` 0.5** (it needs `^0.5` for the stop switch). The
   sale and the buyer are built with the library's `Seller` and `Buyer`.
   Nothing else changes for a site: no update hook, `drush cr` after updating.

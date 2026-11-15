@@ -196,6 +196,36 @@ final class PriceFieldTest extends KernelTestBase {
   }
 
   /**
+   * A payment field with something after its value is refused, not an error.
+   *
+   * With quebracho/x402 before 0.5.1 a nonce or a payer ending in a newline
+   * reached the EIP-712 encoder and threw: a 500 anybody could cause. Nothing
+   * is verified online, settled or logged for it.
+   */
+  public function testPaymentFieldWithTrailingNewlineIsRefused(): void {
+    $facilitator = $this->createMock(Facilitator::class);
+    $facilitator->expects($this->never())->method('verify');
+    $facilitator->expects($this->never())->method('settle');
+    $this->useFacilitator($facilitator);
+    $accepted = X402PriceItem::find($this->entity)->requirements();
+
+    foreach (['nonce', 'from', 'to', 'value', 'validAfter', 'validBefore', 'signature'] as $field) {
+      $payment = PaymentHeaders::decode($this->payment($accepted));
+      if ($field === 'signature') {
+        $payment['payload']['signature'] .= "\n";
+      }
+      else {
+        $payment['payload']['authorization'][$field] .= "\n";
+      }
+      $response = $this->get('/entity_test/1', [PaymentHeaders::SIGNATURE => PaymentHeaders::encode($payment)]);
+
+      $this->assertSame(402, $response->getStatusCode(), $field . ': ' . substr((string) $response->getContent(), 0, 300));
+      $this->assertSame('invalid_payload', PaymentHeaders::decode($response->headers->get(PaymentHeaders::REQUIRED))['error'], $field);
+    }
+    $this->assertSame(0, (int) \Drupal::database()->select('x402_pay_log')->countQuery()->execute()->fetchField());
+  }
+
+  /**
    * A payer on OFAC's list is refused before the facilitator is asked.
    *
    * The list is the snapshot cron writes: the shipped one does not name the

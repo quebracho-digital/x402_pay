@@ -11,6 +11,7 @@ use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Quebracho\X402\Field;
 use Quebracho\X402\Networks;
 use Quebracho\X402\Rpc;
 use Quebracho\X402\Signer;
@@ -77,7 +78,7 @@ class Sweeper {
   public function sweep(bool $send = TRUE): array {
     $settings = $this->config->get('x402_pay.settings')->get('sweep') ?? [];
     $to = (string) ($settings['to'] ?? '');
-    if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $to)) {
+    if (!Field::is(Field::ADDRESS, $to)) {
       throw new \RuntimeException('No cold wallet to sweep to.');
     }
     $min = Networks::atomic((string) ($settings['min'] ?? '1'), 6);

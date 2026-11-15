@@ -14,6 +14,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Url;
+use Quebracho\X402\Field;
 use Quebracho\X402\Networks;
 use Quebracho\X402\Signer;
 
@@ -222,7 +223,7 @@ class X402PriceItem extends FieldItemBase {
     }
     $address = (string) $this->getSetting('pay_to');
     return match (TRUE) {
-      (bool) preg_match('/^0x[0-9a-fA-F]{40}$/', $address) => Signer::checksum($address),
+      Field::is(Field::ADDRESS, $address) => Signer::checksum($address),
       self::isSolanaAddress($address) => $address,
       default => throw new \RuntimeException('The x402 price field has no seller key nor address.'),
     };
@@ -234,7 +235,7 @@ class X402PriceItem extends FieldItemBase {
    * The shape only (ponytail): the facilitator refuses a wrong key.
    */
   public static function isSolanaAddress(string $address): bool {
-    return (bool) preg_match('/^[1-9A-HJ-NP-Za-km-z]{32,44}$/', $address);
+    return Field::is(Field::BASE58, $address);
   }
 
   /**
@@ -373,7 +374,7 @@ class X402PriceItem extends FieldItemBase {
     if ($key !== '') {
       return;
     }
-    if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $address)) {
+    if (!Field::is(Field::ADDRESS, $address)) {
       $form_state->setError($element, t('Choose a seller key, or give the address paid: 0x followed by 40 hex characters.'));
     }
     // Circle needs its API key to settle for an address alone; ours or

@@ -10,6 +10,7 @@ use Drupal\Core\State\StateInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Quebracho\X402\Field;
 use Quebracho\X402\Networks;
 use Quebracho\X402\Rpc;
 use Quebracho\X402\Settlement;
@@ -240,14 +241,14 @@ class Reconciler {
    *   caller keeps the row for the next run instead of deciding on a guess.
    */
   private function spent(object $row): bool {
-    if (!preg_match('/^0x[0-9a-f]{64}$/', (string) $row->nonce) || !preg_match('/^0x[0-9a-fA-F]{40}$/', (string) $row->payer)) {
+    if (!Field::is(Field::BYTES32, $row->nonce) || !Field::is(Field::ADDRESS, $row->payer)) {
       return FALSE;
     }
     $network = Networks::get($row->network);
     $rpc = new Rpc($this->httpClient, $this->psr17, $this->psr17, $network['rpc']);
     $data = self::AUTHORIZATION_STATE . str_pad(strtolower(substr($row->payer, 2)), 64, '0', STR_PAD_LEFT) . substr($row->nonce, 2);
     $answer = $rpc('eth_call', [['to' => $network['asset'], 'data' => $data], 'latest']);
-    if (!is_string($answer) || !preg_match('/^0x[0-9a-fA-F]+$/', $answer)) {
+    if (!is_string($answer) || !preg_match('/\A0x[0-9a-fA-F]+\z/', $answer)) {
       throw new \RuntimeException('authorizationState answered ' . json_encode($answer));
     }
     return gmp_cmp(Rpc::number($answer), 0) !== 0;
@@ -266,7 +267,7 @@ class Reconciler {
     $asset = strtolower(Networks::get($row->network)['asset']);
     $pad = fn(string $address): string => '0x' . str_pad(strtolower(substr($address, 2)), 64, '0', STR_PAD_LEFT);
     $legacy = $row->nonce === NULL || $row->nonce === '';
-    if (!$legacy && !preg_match('/^0x[0-9a-fA-F]{40}$/', (string) $row->payer)) {
+    if (!$legacy && !Field::is(Field::ADDRESS, $row->payer)) {
       return 'unverifiable: the log has no payer';
     }
     $paid = FALSE;
@@ -278,7 +279,7 @@ class Reconciler {
       $topics = array_map('strtolower', array_map('strval', $log['topics'] ?? []));
       if (($topics[0] ?? '') === self::TRANSFER && ($topics[2] ?? '') === $pad($row->pay_to)
         && ($legacy ? ($row->payer === NULL || $row->payer === '' || ($topics[1] ?? '') === $pad($row->payer)) : TRUE)
-        && preg_match('/^0x[0-9a-fA-F]+$/', (string) $log['data'])
+        && preg_match('/\A0x[0-9a-fA-F]+\z/', (string) $log['data'])
         && gmp_cmp(Rpc::number((string) $log['data']), gmp_init($row->amount, 10)) === 0) {
         $paid = TRUE;
       }

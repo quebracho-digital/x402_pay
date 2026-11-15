@@ -9,6 +9,7 @@ use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\key\KeyRepositoryInterface;
+use Quebracho\X402\Field;
 use Quebracho\X402\Networks;
 use Quebracho\X402\Signer;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -217,7 +218,7 @@ final class SettingsForm extends ConfigFormBase {
     catch (\InvalidArgumentException) {
       $form_state->setErrorByName('sweep][min', $this->t('An amount above zero, with a dot and at most 6 decimals.'));
     }
-    if ($sweep['to'] !== '' && !preg_match('/^0x[0-9a-fA-F]{40}$/', trim($sweep['to']))) {
+    if ($sweep['to'] !== '' && !Field::is(Field::ADDRESS, trim($sweep['to']))) {
       $form_state->setErrorByName('sweep][to', $this->t('An address: 0x followed by 40 hex characters.'));
     }
     elseif (in_array(strtolower(trim($sweep['to'])), $addresses, TRUE)) {

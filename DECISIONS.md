@@ -26,6 +26,29 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
+## 2026-11-15 (1.0.0-beta5)
+
+### One spelling per value: the library's `Field`, here too
+
+Decided by Leo (2026-11-15), translated from his Spanish: after an audit of
+the library, "update x402_pay and we release a new version; first write the
+tests".
+
+- **What:** `quebracho/x402` is now `^0.5.1`, and the module's own format
+  checks go through the library's `Quebracho\X402\Field` instead of regular
+  expressions of its own: the payer, nonce and deadline the gate logs
+  (`PaymentGate`), the rows `Reconciler` asks the chain about, the sweep's
+  cold wallet (`Sweeper`, the settings form) and the price field's address.
+- **Why:** a PCRE `$` also matches before a final newline. In the library
+  before 0.5.1 a payment whose `nonce` or payer ended in one passed the
+  format check and then made the EIP-712 encoder throw: a paid URL answered
+  500, for anybody, with no funds. Nothing was charged or delivered. The
+  module's own checks had the same `$`.
+- **Rejected:** keeping the module's expressions and only fixing their
+  anchors. Two lists of what an address or a nonce is drift apart; the
+  library's is the one its signatures are checked against.
+- **Revisit:** if the module must run on a library older than 0.5.1.
+
 ## 2026-11-11 (unreleased)
 
 ### A stop switch, twice: the library's flag file and the module's state

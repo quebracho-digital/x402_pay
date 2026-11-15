@@ -15,6 +15,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Quebracho\X402\EvmExact;
 use Quebracho\X402\FacilitatorException;
+use Quebracho\X402\Field;
 use Quebracho\X402\OfacSdn;
 use Quebracho\X402\PaymentHeaders;
 use Quebracho\X402\Seller;
@@ -317,15 +318,15 @@ class PaymentGate {
     $authorization = $payment['payload']['authorization'] ?? [];
     $found = [];
     $from = $authorization['from'] ?? NULL;
-    if (is_string($from) && preg_match('/^0x[0-9a-fA-F]{40}$/', $from)) {
+    if (Field::is(Field::ADDRESS, $from)) {
       $found['from'] = $from;
     }
     $nonce = $authorization['nonce'] ?? NULL;
-    if (is_string($nonce) && preg_match('/^0x[0-9a-fA-F]{64}$/', $nonce)) {
+    if (Field::is(Field::BYTES32, $nonce)) {
       $found['nonce'] = strtolower($nonce);
     }
     $until = $authorization['validBefore'] ?? NULL;
-    if ((is_string($until) || is_int($until)) && preg_match('/^[0-9]{1,15}$/', (string) $until)) {
+    if ((is_string($until) || is_int($until)) && Field::is(Field::TIMESTAMP, (string) $until)) {
       $found['validBefore'] = (int) $until;
     }
     return $found;
