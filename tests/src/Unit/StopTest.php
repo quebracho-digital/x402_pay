@@ -104,7 +104,7 @@ class StopTest extends UnitTestCase {
    * @covers ::layers
    * @covers ::note
    */
-  public function testPausesBothSwitchesTheLibrarysFirstAndResumesBoth(): void {
+  public function testPausesBothSwitchesLibraryFirstAndResumesBoth(): void {
     $stop = $this->stop();
     $this->assertFalse($stop->engaged());
     $this->assertSame(['library' => FALSE, 'module' => FALSE], $stop->layers());
@@ -160,7 +160,7 @@ class StopTest extends UnitTestCase {
    *
    * @covers ::engage
    */
-  public function testTheModulesSwitchPausesWhenTheLibrarysCannotBeSet(): void {
+  public function testTheModulesSwitchPausesWhenTheLibraryOneCannotBeSet(): void {
     $stop = $this->stop();
     // A directory others can write to: the library refuses a flag anyone
     // could remove.
@@ -180,7 +180,7 @@ class StopTest extends UnitTestCase {
    * @covers ::engage
    * @covers ::layers
    */
-  public function testTheLibrarysSwitchPausesWhenTheDatabaseIsDown(): void {
+  public function testTheLibrarySwitchPausesWhenTheDatabaseIsDown(): void {
     $stop = $this->stop();
     $this->stateDown = TRUE;
     // A state that cannot be read counts as engaged: unsure, the site does
