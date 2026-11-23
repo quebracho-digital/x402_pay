@@ -26,7 +26,7 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
-## 2026-11-23 (unreleased)
+## 2026-11-23 (1.0.0-beta6)
 
 ### The module follows the library to 0.6
 
