@@ -11,7 +11,7 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   [Ombú](https://github.com/quebracho-digital/ombu), the agent mall.
 - **Built on:** the MIT library
   [`quebracho/x402`](https://github.com/quebracho-digital/x402)
-  `^0.5.1` (protocol, signatures, facilitators, OFAC screening, the stop
+  `^0.6` (protocol, signatures, facilitators, OFAC screening, the stop
   switch); this module
   is what Drupal adds around it. PHP only: no Node.js, no npm.
 - **Install:** `composer require drupal/x402_pay`, enable it, set a seller key
@@ -24,6 +24,11 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
 
 ## What is new in this release
 
+- **Runs on `quebracho/x402` `^0.6`.** 0.6.0 binds each payment state in the
+  library's ledger to the offer it paid for, and adds an experimental
+  Concordium scheme. The module keeps no ledger of its own and offers no
+  Concordium network, so nothing changes for a site: `drush cr` after
+  updating.
 - **A stop switch pauses every payment at once.** `drush x402:stop on "why"`
   or the **Pause payments** tab of the settings (its own permission, *Pause
   and resume x402 payments*): a paid request is answered `503

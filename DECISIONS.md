@@ -26,6 +26,22 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
+## 2026-11-23 (unreleased)
+
+### The module follows the library to 0.6
+
+Decided by Leo (2026-11-23), translated from his Spanish: after tagging the
+library's 0.6.0, "upgrade the consumers".
+
+- **What:** `quebracho/x402` is now `^0.6`.
+- **Why:** 0.6.0 is the library's release with the ledger fix (a state is
+  bound to the offer it paid for). Sites that pull this module get that fix
+  with it. The module uses no `PaymentLedger` and no Concordium network, so
+  its own code does not change.
+- **Rejected:** `^0.5.1 || ^0.6`. It would let a site stay on the release
+  without the fix.
+- **Revisit:** when the library reaches 1.0.
+
 ## 2026-11-15 (1.0.0-beta5)
 
 ### One spelling per value: the library's `Field`, here too
