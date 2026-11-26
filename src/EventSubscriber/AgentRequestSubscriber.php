@@ -77,14 +77,16 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function answerAgent(RequestEvent $event, FieldableEntityInterface $entity): void {
     $request = $event->getRequest();
-    $canonical = $this->isCanonical($request);
-    $markdown = $canonical && $this->wantsMarkdown($request);
-    $here = $canonical ? X402PriceItem::find($entity) : NULL;
+    // The entity's page, as HTML or as markdown: its own route, or the twins
+    // Markdownify adds for it (/node/1.md, /markdownify/node/1).
+    $page = $this->isPage($request);
+    $markdown = $page && ($this->wantsMarkdown($request) || $request->getRequestFormat() === 'markdown');
+    $here = $page ? X402PriceItem::find($entity) : NULL;
     // On its own URL: what a field sells there (its "canonical" setting);
     // asked for markdown (Accept, or .md), also the page's view mode sold at
     // its x402 URL, since that markdown is the product. Elsewhere (JSON:API,
     // REST) the route can show any field, so anything sold is charged.
-    $item = $canonical
+    $item = $page
       ? $here ?? ($markdown ? X402PriceItem::find($entity, self::PAGE) : NULL)
       : X402PriceItem::find($entity) ?? X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::all($entity)[0] ?? NULL;
     if ($item && $this->isAgent($request)) {
@@ -92,8 +94,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
       // x402 URL of the product.
       $event->setResponse($this->delivery->charge($request, $entity, $item, $here !== NULL));
     }
-    // Free: neither this URL nor the page's markdown is sold.
-    elseif (!$item && $markdown) {
+    // Free: neither this URL nor the page's markdown is sold. A route that
+    // answers markdown itself (Markdownify's) converts it its own way.
+    elseif (!$item && $markdown && $this->isCanonical($request)) {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
@@ -166,6 +169,17 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function isCanonical(Request $request): bool {
     return (bool) preg_match('/^entity\.\w+\.canonical$/', (string) $request->attributes->get('_route'));
+  }
+
+  /**
+   * Whether the route shows an entity's own page, in any format.
+   *
+   * Its own route, or the ones Markdownify adds for it: the same path in the
+   * markdown format (entity.node.canonical_markdownify) and its own prefix
+   * (entity.node.markdownify, /markdownify/node/1).
+   */
+  private function isPage(Request $request): bool {
+    return (bool) preg_match('/^entity\.\w+\.(canonical|canonical_markdownify|markdownify)$/', (string) $request->attributes->get('_route'));
   }
 
   /**

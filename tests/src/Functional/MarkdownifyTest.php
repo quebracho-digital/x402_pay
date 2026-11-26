@@ -140,6 +140,31 @@ final class MarkdownifyTest extends BrowserTestBase {
   }
 
   /**
+   * A free page that sells another view mode reads free on Markdownify too.
+   *
+   * Markdownify's routes show the entity's page as markdown: what is charged
+   * there is what is charged on the page, not anything the entity sells.
+   */
+  public function testAFreePageSellingAnotherViewModeIsFreeOnMarkdownify(): void {
+    $field = FieldConfig::loadByName('node', 'page', 'field_price');
+    $field->setSetting('view_mode', 'teaser')->setSetting('canonical', FALSE)->save();
+    $this->markdownify();
+    // One reading of ".md": Markdownify's (X402PayServiceProvider).
+    $this->assertFalse($this->container->has('x402_pay.markdown_path_processor'));
+    $node = Node::create(['type' => 'page', 'title' => 'Free page', 'body' => 'Free body', 'field_price' => ['enabled' => 1]]);
+    $node->save();
+    $path = 'node/' . $node->id();
+    foreach (["$path.md", "markdownify/$path"] as $url) {
+      $this->drupalGet($url, [], ['Accept' => self::BROWSER]);
+      $this->assertSame(200, $this->getSession()->getStatusCode(), $url);
+      $this->assertStringContainsString('Free body', $this->getSession()->getPage()->getContent(), $url);
+    }
+    // The teaser is still sold at its own URL.
+    $this->drupalGet("x402/node/{$node->id()}/teaser", [], ['Accept' => self::BROWSER]);
+    $this->assertSame(402, $this->getSession()->getStatusCode());
+  }
+
+  /**
    * What a visitor may not see is neither sold nor converted.
    */
   public function testUnpublishedIsDenied(): void {
