@@ -162,6 +162,24 @@ class Delivery {
   }
 
   /**
+   * What a field sells of an entity shown in a view mode, if anything.
+   *
+   * Sold in that mode, or in one drawn with the same display: a mode with no
+   * display of its own falls back to the default one, so selling it sells
+   * what any other mode falling back there shows.
+   */
+  public static function soldIn(FieldableEntityInterface $entity, string $viewMode): ?X402PriceItem {
+    $shown = EntityViewDisplay::collectRenderDisplay($entity, $viewMode)->getMode();
+    foreach (X402PriceItem::all($entity) as $item) {
+      $mode = $item->viewMode();
+      if ($mode === $viewMode || $mode === $shown || EntityViewDisplay::collectRenderDisplay($entity, $mode)->getMode() === $shown) {
+        return $item;
+      }
+    }
+    return NULL;
+  }
+
+  /**
    * The fields of a view mode as markdown, under the entity's label.
    *
    * Only what the site builder chose in that display: not the entity's

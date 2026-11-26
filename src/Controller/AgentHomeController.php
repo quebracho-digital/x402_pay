@@ -107,8 +107,8 @@ final class AgentHomeController implements ContainerInjectionInterface {
    * The entity in the view mode, or the link to buy it if the page is sold.
    *
    * Sold as the gate sells the page's markdown: on its own URL, in full at
-   * its x402 URL, or in the display shown here (the view mode, or the
-   * default one it falls back to). Any of them: the same fields.
+   * its x402 URL, or drawn with the display shown here (Delivery::soldIn()).
+   * Any of them: the same fields.
    */
   private function page(FieldableEntityInterface $entity, string $viewMode, string $langcode, CacheableMetadata $cache): string {
     foreach ($entity->getFieldDefinitions() as $definition) {
@@ -117,12 +117,10 @@ final class AgentHomeController implements ContainerInjectionInterface {
         $cache->addCacheableDependency($definition);
       }
     }
-    $display = EntityViewDisplay::collectRenderDisplay($entity, $viewMode);
-    $cache->addCacheableDependency($display);
+    $cache->addCacheableDependency(EntityViewDisplay::collectRenderDisplay($entity, $viewMode));
     $item = X402PriceItem::find($entity)
       ?? X402PriceItem::find($entity, 'full')
-      ?? X402PriceItem::find($entity, $viewMode)
-      ?? X402PriceItem::find($entity, $display->getMode());
+      ?? Delivery::soldIn($entity, $viewMode);
     if (!$item) {
       return $this->delivery->markdownText($entity, $viewMode, $cache);
     }

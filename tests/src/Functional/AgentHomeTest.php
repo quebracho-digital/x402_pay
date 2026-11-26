@@ -160,6 +160,23 @@ final class AgentHomeTest extends BrowserTestBase {
   }
 
   /**
+   * A view mode sold without a display of its own is not free here.
+   *
+   * It falls back to the default display, the one shown here: same fields.
+   */
+  public function testSoldModeWithoutDisplayIsOnlyLinked(): void {
+    EntityViewMode::create(['id' => 'node.premium', 'label' => 'Premium', 'targetEntityType' => 'node'])->save();
+    FieldConfig::loadByName('node', 'page', 'field_price')->setSetting('view_mode', 'premium')->setSetting('canonical', FALSE)->save();
+    $this->home->set('field_price', ['enabled' => 1])->save();
+    $this->drupalGet('index.md');
+    $this->assertSession()->responseNotContains('Welcome body');
+    $this->assertSession()->responseContains('/x402/node/' . $this->home->id() . '/premium');
+    // And on the page's own .md.
+    $this->drupalGet('node/' . $this->home->id() . '.md');
+    $this->assertSession()->statusCodeEquals(402);
+  }
+
+  /**
    * A front page set by its alias (/home), and a chosen page by alias.
    */
   public function testAliases(): void {
