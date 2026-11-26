@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Url;
+use Drupal\x402_pay\AgentHome;
 use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\PathProcessor\MarkdownPathProcessor;
 use Quebracho\X402\PaymentHeaders;
@@ -42,6 +43,7 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     private readonly Delivery $delivery,
     private readonly ConfigFactoryInterface $configFactory,
     private readonly KillSwitch $pageCacheKillSwitch,
+    private readonly AgentHome $agentHome,
   ) {}
 
   /**
@@ -66,8 +68,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
       $this->answerAgent($event, $entity);
     }
     // A .md path is markdown or a sale, never the HTML page under its name;
-    // a route that answers markdown itself (Markdownify's) answers it.
-    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse() && $request->getRequestFormat() !== 'markdown') {
+    // a route that answers markdown itself (Markdownify's, another module's
+    // in the markdown format) answers it.
+    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse() && !$this->answersMarkdown($request)) {
       throw new NotFoundHttpException();
     }
   }
@@ -77,26 +80,50 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function answerAgent(RequestEvent $event, FieldableEntityInterface $entity): void {
     $request = $event->getRequest();
-    $canonical = $this->isCanonical($request);
-    $markdown = $canonical && $this->wantsMarkdown($request);
-    $here = $canonical ? X402PriceItem::find($entity) : NULL;
+    // The entity's page, as HTML or as markdown: its own route, or the twins
+    // Markdownify adds for it (/node/1.md, /markdownify/node/1).
+    $page = $this->isPage($request);
+    $markdown = $page && ($this->wantsMarkdown($request) || $request->getRequestFormat() === 'markdown');
+    $here = $page ? X402PriceItem::find($entity) : NULL;
     // On its own URL: what a field sells there (its "canonical" setting);
     // asked for markdown (Accept, or .md), also the page's view mode sold at
     // its x402 URL, since that markdown is the product. Elsewhere (JSON:API,
     // REST) the route can show any field, so anything sold is charged.
-    $item = $canonical
-      ? $here ?? ($markdown ? X402PriceItem::find($entity, self::PAGE) : NULL)
+    $item = $page
+      ? $here ?? ($markdown ? $this->soldMarkdown($request, $entity) : NULL)
       : X402PriceItem::find($entity) ?? X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::all($entity)[0] ?? NULL;
     if ($item && $this->isAgent($request)) {
       // The resource bought: the own URL for what is sold there, else the
       // x402 URL of the product.
       $event->setResponse($this->delivery->charge($request, $entity, $item, $here !== NULL));
     }
-    // Free: neither this URL nor the page's markdown is sold.
-    elseif (!$item && $markdown) {
+    // Free: neither this URL nor the page's markdown is sold. The home page's
+    // own page reads as the home page for agents (/es/home.md as /es.md); a
+    // route that answers markdown itself (Markdownify's) converts the rest.
+    elseif (!$item && $markdown && $this->agentHome->isHome($entity)) {
+      $this->pageCacheKillSwitch->trigger();
+      $event->setResponse($this->agentHome->response($request));
+    }
+    elseif (!$item && $markdown && $this->isCanonical($request)) {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
+  }
+
+  /**
+   * What a field sells of the page's markdown, if anything.
+   *
+   * The markdown shows a view mode: "full" here, or on Markdownify's routes
+   * the one its settings give the bundle. Sold in that mode, or in one drawn
+   * with the same display (Delivery::soldIn()), it is the product.
+   */
+  private function soldMarkdown(Request $request, FieldableEntityInterface $entity): ?X402PriceItem {
+    $mode = self::PAGE;
+    if (!$this->isCanonical($request)) {
+      $modes = $this->configFactory->get('markdownify.settings')->get('supported_entities.' . $entity->getEntityTypeId() . '.view_modes');
+      $mode = (string) ($modes[$entity->bundle()] ?? self::PAGE);
+    }
+    return X402PriceItem::find($entity, self::PAGE) ?? Delivery::soldIn($entity, $mode);
   }
 
   /**
@@ -166,6 +193,25 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function isCanonical(Request $request): bool {
     return (bool) preg_match('/^entity\.\w+\.canonical$/', (string) $request->attributes->get('_route'));
+  }
+
+  /**
+   * Whether the route is one in the markdown format, which answers itself.
+   */
+  private function answersMarkdown(Request $request): bool {
+    $route = $request->attributes->get('_route_object');
+    return $route && in_array('markdown', explode('|', (string) $route->getRequirement('_format')), TRUE);
+  }
+
+  /**
+   * Whether the route shows an entity's own page, in any format.
+   *
+   * Its own route, or the ones Markdownify adds for it: the same path in the
+   * markdown format (entity.node.canonical_markdownify) and its own prefix
+   * (entity.node.markdownify, /markdownify/node/1).
+   */
+  private function isPage(Request $request): bool {
+    return (bool) preg_match('/^entity\.\w+\.(canonical|canonical_markdownify|markdownify)$/', (string) $request->attributes->get('_route'));
   }
 
   /**

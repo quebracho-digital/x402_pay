@@ -27,7 +27,7 @@ final class SettingsFormTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['x402_pay', 'key'];
+  protected static $modules = ['x402_pay', 'key', 'node'];
 
   /**
    * {@inheritdoc}
@@ -111,6 +111,42 @@ final class SettingsFormTest extends BrowserTestBase {
       ],
     ], $config->get('facilitator'));
     $this->assertSame(['enabled' => TRUE, 'to' => self::COLD, 'keys' => ['seller'], 'min' => '0.5', 'interval' => 21600], $config->get('sweep'));
+  }
+
+  /**
+   * The home page for agents: what is refused, and what is saved.
+   */
+  public function testAgentHomeSettings(): void {
+    $this->drupalGet('admin/config/services/x402');
+
+    // A path starts with one slash.
+    $this->submitForm(['agent_home_path' => 'node/1'], 'Save configuration');
+    $this->assertSession()->pageTextContains('An internal path, starting with a slash, such as /node/12.');
+    $this->assertSame('', $this->config('x402_pay.settings')->get('agent_home.path'));
+
+    // Only the page of an entity.
+    $this->submitForm(['agent_home_path' => '/user/login'], 'Save configuration');
+    $this->assertSession()->pageTextContains('Use the page of an entity, such as /node/12.');
+
+    // A view mode is a machine name.
+    $this->submitForm(['agent_home_view_mode' => 'Agent Mode'], 'Save configuration');
+    $this->assertSession()->pageTextContains('Use a machine name, such as agent.');
+
+    // An entity's page, one of its displays, and no catalogue.
+    $this->drupalCreateContentType(['type' => 'page']);
+    $node = $this->drupalCreateNode(['type' => 'page']);
+    $this->submitForm([
+      'agent_home_path' => '/node/' . $node->id(),
+      'agent_home_view_mode' => 'teaser',
+      'agent_home_catalog' => FALSE,
+    ], 'Save configuration');
+    $this->assertSession()->pageTextContains('The configuration options have been saved.');
+    $this->container->get('config.factory')->reset();
+    $this->assertSame([
+      'path' => '/node/' . $node->id(),
+      'view_mode' => 'teaser',
+      'catalog' => FALSE,
+    ], $this->config('x402_pay.settings')->get('agent_home'));
   }
 
 }

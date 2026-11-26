@@ -8,6 +8,8 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Path\PathValidatorInterface;
+use Drupal\Core\Url;
 use Drupal\key\KeyRepositoryInterface;
 use Quebracho\X402\Field;
 use Quebracho\X402\Networks;
@@ -23,6 +25,7 @@ final class SettingsForm extends ConfigFormBase {
     ConfigFactoryInterface $configFactory,
     TypedConfigManagerInterface $typedConfigManager,
     protected KeyRepositoryInterface $keys,
+    protected PathValidatorInterface $pathValidator,
   ) {
     parent::__construct($configFactory, $typedConfigManager);
   }
@@ -31,7 +34,7 @@ final class SettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container): static {
-    return new static($container->get('config.factory'), $container->get('config.typed'), $container->get('key.repository'));
+    return new static($container->get('config.factory'), $container->get('config.typed'), $container->get('key.repository'), $container->get('path.validator'));
   }
 
   /**
@@ -173,6 +176,31 @@ final class SettingsForm extends ConfigFormBase {
         '#default_value' => $sweep['interval'] ?? 21600,
       ],
     ];
+
+    $agentHome = $config->get('agent_home') ?? [];
+    $form['agent_home'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Home page for agents'),
+      '#description' => $this->t('What an agent reads at /index.md, and at /es.md and so on in each language.'),
+      'agent_home_path' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Page'),
+        '#description' => $this->t("An internal path such as /node/12. Empty is the site's front page."),
+        '#default_value' => $agentHome['path'] ?? '',
+      ],
+      'agent_home_view_mode' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('View mode'),
+        '#description' => $this->t('Machine name of the display shown, such as agent or teaser. Without it enabled, the default display is shown.'),
+        '#required' => TRUE,
+        '#default_value' => $agentHome['view_mode'] ?? 'agent',
+      ],
+      'agent_home_catalog' => [
+        '#type' => 'checkbox',
+        '#title' => $this->t('List what this site sells below it'),
+        '#default_value' => $agentHome['catalog'] ?? TRUE,
+      ],
+    ];
     return parent::buildForm($form, $form_state);
   }
 
@@ -227,6 +255,20 @@ final class SettingsForm extends ConfigFormBase {
     if ($sweep['enabled'] && ($sweep['to'] === '' || !$keys)) {
       $form_state->setErrorByName('sweep][enabled', $this->t('Sweeping needs a cold wallet and at least one key.'));
     }
+
+    $path = trim((string) $form_state->getValue('agent_home_path'));
+    if ($path !== '' && !str_starts_with($path, '/')) {
+      $form_state->setErrorByName('agent_home_path', $this->t('An internal path, starting with a slash, such as /node/12.'));
+    }
+    elseif ($path !== '') {
+      $url = $this->pathValidator->getUrlIfValidWithoutAccessCheck($path);
+      if (!$url instanceof Url || !$url->isRouted() || !preg_match('/^entity\.\w+\.canonical$/', (string) $url->getRouteName())) {
+        $form_state->setErrorByName('agent_home_path', $this->t('Use the page of an entity, such as /node/12.'));
+      }
+    }
+    if (!preg_match('/^[a-z0-9_]+$/', (string) $form_state->getValue('agent_home_view_mode'))) {
+      $form_state->setErrorByName('agent_home_view_mode', $this->t('Use a machine name, such as agent.'));
+    }
   }
 
   /**
@@ -254,6 +296,11 @@ final class SettingsForm extends ConfigFormBase {
         'keys' => array_values(array_filter($sweep['keys'])),
         'min' => trim((string) $sweep['min']),
         'interval' => (int) $sweep['interval'],
+      ])
+      ->set('agent_home', [
+        'path' => trim((string) $form_state->getValue('agent_home_path')),
+        'view_mode' => (string) $form_state->getValue('agent_home_view_mode'),
+        'catalog' => (bool) $form_state->getValue('agent_home_catalog'),
       ])
       ->save();
     parent::submitForm($form, $form_state);

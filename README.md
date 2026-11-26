@@ -163,13 +163,30 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   headers: `/terms.md`, `/es/terms.md`, `/node/1.md`. The same gate, as for
   the own URL asked for markdown: a free page as markdown, a sold one
   charged (402), anything else 404, never the HTML under a `.md` name.
-  A path alias ending in `.md` is not reachable. Another
-  module answers its own pages' `.md` from a request subscriber between
-  routing (32) and the gate (30), checking `MarkdownPathProcessor::asked()`.
+  A path alias ending in `.md` is not reachable. Another module answers its
+  own page's `.md` the way Markdownify reads it: a route at the same path
+  that requires `_format: markdown`, and the same under `/markdownify` for
+  sites with Markdownify (`MarkdownRouteTest`). A `.md` path asks for the
+  markdown format with or without Markdownify. The gate charges an entity a route
+  receives as a parameter (upcast); a route that loads what it shows by
+  itself must charge it itself.
   A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
+- **The home page for agents:** `/index.md`, and `/es.md` in each language
+  (not `/.md`: web servers refuse paths starting with a dot). The page chosen
+  in the settings (the front page by default) in the `agent` view mode, else
+  its default display; then what the site sells, one link each, with the
+  link to `/x402/discovery`. Other modules add sections (how to book, an MCP
+  endpoint) by listening to `AgentHomeEvent`. A view mode that is sold is
+  linked there, never shown free. That page's own `.md` (`/es/home.md`)
+  answers the same home page: one for agents, however they reach it. Markdownify has no front page, so the two
+  do not meet.
 - **With Markdownify:** not needed (it converts with the same library,
-  `league/html-to-markdown`), and both can be enabled. `MarkdownifyTest` asks
+  `league/html-to-markdown`), and both can be enabled. Then `.md` paths are
+  Markdownify's: ours steps aside (`X402PayServiceProvider`), Markdownify
+  converts free pages, and the gate charges on its routes what the page
+  charges. Enable `markdownify_path` for aliases, and Markdownify on the
+  bundles that sell: its access check runs before the gate. `MarkdownifyTest` asks
   a priced node through each of its ways (`.md`, `/markdownify/node/N`,
   `?_format=markdown`, `Accept: text/markdown` next to a browser's Accept)
   and gets 402; a free node reads as markdown and a draft is denied. It holds

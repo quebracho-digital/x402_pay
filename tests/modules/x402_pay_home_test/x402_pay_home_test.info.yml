@@ -1,0 +1,7 @@
+name: 'x402 Pay home test'
+type: module
+description: 'Adds a section to the home page for agents.'
+package: Testing
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - x402_pay:x402_pay

@@ -73,9 +73,16 @@ services:
   x402_pay.delivery:
     class: Drupal\x402_pay\Delivery
     arguments: ['@x402_pay.gate', '@renderer', '@event_dispatcher', '@current_user', '@logger.channel.x402_pay']
+  x402_pay.catalog:
+    class: Drupal\x402_pay\Catalog
+    arguments: ['@entity_type.manager', '@entity_field.manager', '@entity.repository', '@x402_pay.delivery']
+  Drupal\x402_pay\Catalog: '@x402_pay.catalog'
+  x402_pay.agent_home:
+    class: Drupal\x402_pay\AgentHome
+    arguments: ['@config.factory', '@entity_type.manager', '@language_manager', '@path.validator', '@event_dispatcher', '@x402_pay.delivery', '@x402_pay.catalog']
   x402_pay.agent_request_subscriber:
     class: Drupal\x402_pay\EventSubscriber\AgentRequestSubscriber
-    arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch']
+    arguments: ['@x402_pay.delivery', '@config.factory', '@page_cache_kill_switch', '@x402_pay.agent_home']
     tags:
       - { name: event_subscriber }
   x402_pay.markdown_path_processor:
@@ -84,6 +91,18 @@ services:
       # After the language prefix (300) and private files (200, which turns
       # /system/files/a.md into a query), before aliases (100).
       - { name: path_processor_inbound, priority: 150 }
+  # /index.md and /{prefix}.md are the home page for agents. Before our .md
+  # processor (150) and Markdownify's (100), which would read them as pages.
+  x402_pay.agent_home_path_processor:
+    class: Drupal\x402_pay\PathProcessor\AgentHomePathProcessor
+    arguments: ['@config.factory']
+    tags:
+      - { name: path_processor_inbound, priority: 160 }
+  # Before core's format filter, which keeps routes of the request's format.
+  x402_pay.markdown_format_route_filter:
+    class: Drupal\x402_pay\Routing\MarkdownFormatRouteFilter
+    tags:
+      - { name: route_filter, priority: 100 }
   x402_pay.page_cache_request_policy:
     class: Drupal\x402_pay\PageCache\AgentRequestPolicy
     tags:
