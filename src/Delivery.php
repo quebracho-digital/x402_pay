@@ -174,8 +174,11 @@ class Delivery {
 
   /**
    * The markdown of markdown(), as text: for pages that put it with more.
+   *
+   * What the render depends on (referenced entities, access per user) goes
+   * to $cache: a cached page without it is shared or stale.
    */
-  public function markdownText(FieldableEntityInterface $entity, string $viewMode): string {
+  public function markdownText(FieldableEntityInterface $entity, string $viewMode, ?CacheableMetadata $cache = NULL): string {
     $build = EntityViewDisplay::collectRenderDisplay($entity, $viewMode)->build($entity);
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
       if ($definition->getType() === 'x402_price' || !$definition->isDisplayConfigurable('view')) {
@@ -183,6 +186,7 @@ class Delivery {
       }
     }
     $html = (string) $this->renderer->renderInIsolation($build);
+    $cache?->addCacheableDependency(CacheableMetadata::createFromRenderArray($build));
     $body = (new HtmlConverter(['strip_tags' => TRUE, 'remove_nodes' => 'script style', 'hard_break' => TRUE]))->convert($html);
     // Field wrappers leave runs of blank (or space-only) lines: one is enough.
     $body = preg_replace('/\n(?:[ \t\x{a0}]*\n){2,}/u', "\n\n", $body);

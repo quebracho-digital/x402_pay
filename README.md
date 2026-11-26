@@ -167,7 +167,9 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   own page's `.md` the way Markdownify reads it: a route at the same path
   that requires `_format: markdown`, and the same under `/markdownify` for
   sites with Markdownify (`MarkdownRouteTest`). A `.md` path asks for the
-  markdown format with or without Markdownify.
+  markdown format with or without Markdownify. The gate charges an entity a route
+  receives as a parameter (upcast); a route that loads what it shows by
+  itself must charge it itself.
   A free page names it in `<head>`
   (`<link rel="alternate" type="text/markdown">`) and in a `Link` header.
 - **The home page for agents:** `/index.md`, and `/es.md` in each language

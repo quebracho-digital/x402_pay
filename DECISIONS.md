@@ -50,6 +50,14 @@ at `/node/1.md`).
 - **Limit:** with Markdownify, a bundle it does not convert answers its
   `.md` with 403 from Markdownify's access check, before the gate: enable it
   on the bundles that sell.
+- **Upgrade note:** the README used to tell a module to answer its own
+  `.md` from a request subscriber between routing (32) and the gate (30).
+  That still works without Markdownify (`MarkdownPathProcessor::asked()` is
+  unchanged), but the request now has the markdown format; with Markdownify
+  our processor is gone and Markdownify reads the path. Move to a route that
+  requires `_format: markdown`.
+- **Also:** a `.md` path no longer reaches a route that requires another
+  format (`_format: json` or `html`); it never was that format's page.
 
 ### A home page for agents, at /index.md
 
@@ -60,6 +68,14 @@ agents something other than what people see. A page chosen in the settings
 sections from other modules (`AgentHomeEvent`).
 
 - **Not `/.md`:** web servers refuse paths starting with a dot.
+- **Sold, linked:** if the page is sold anywhere its markdown is (its own
+  URL, `full`, or the display shown), the home page links the product.
+- **In English:** the module's own lines (`Sold here with x402`) are for
+  agents and stay untranslated; the page and its catalogue are in the
+  language of the path (`/es.md`).
+- **Limit:** the catalogue is cached by permissions, as at
+  `/x402/discovery`: a price event that varies by anything else must not
+  be cached (no way to declare it yet).
 - **Rejected:** a text field in the settings (a page in a view mode is
   edited, translated and access-checked like any other); rendering the front
   page's route whatever it is (only an entity's page; a view or controller

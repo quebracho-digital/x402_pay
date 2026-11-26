@@ -9,9 +9,11 @@ use Drupal\Core\Cache\CacheableResponse;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\AutowireTrait;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Entity\Entity\EntityViewDisplay;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\TranslatableInterface;
+use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
@@ -61,9 +63,11 @@ final class AgentHomeController implements ContainerInjectionInterface {
       ->addCacheableDependency($site)
       ->addCacheContexts(['url.path', 'user.permissions']);
     if ($this->languageManager->isMultilingual()) {
-      $cache->addCacheableDependency($this->configFactory->get('language.negotiation'));
+      // /index.md has no prefix: its language is the negotiated one.
+      $cache->addCacheableDependency($this->configFactory->get('language.negotiation'))
+        ->addCacheContexts(['languages:' . LanguageInterface::TYPE_CONTENT]);
     }
-    $langcode = AgentHomePathProcessor::langcode($request->getPathInfo(), $this->paths->prefixes()) ?: $this->languageManager->getCurrentLanguage()->getId();
+    $langcode = AgentHomePathProcessor::langcode($request->getPathInfo(), $this->paths->prefixes()) ?: $this->languageManager->getCurrentLanguage(LanguageInterface::TYPE_CONTENT)->getId();
     $home = (array) $settings->get('agent_home') + ['path' => '', 'view_mode' => 'agent', 'catalog' => TRUE];
     $entity = $this->entity($home['path'] ?: (string) $site->get('page.front'), $langcode, $cache);
 
@@ -100,7 +104,11 @@ final class AgentHomeController implements ContainerInjectionInterface {
   }
 
   /**
-   * The entity in the view mode, or the link to buy it if that is sold.
+   * The entity in the view mode, or the link to buy it if the page is sold.
+   *
+   * Sold as the gate sells the page's markdown: on its own URL, in full at
+   * its x402 URL, or in the display shown here (the view mode, or the
+   * default one it falls back to). Any of them: the same fields.
    */
   private function page(FieldableEntityInterface $entity, string $viewMode, string $langcode, CacheableMetadata $cache): string {
     foreach ($entity->getFieldDefinitions() as $definition) {
@@ -109,14 +117,21 @@ final class AgentHomeController implements ContainerInjectionInterface {
         $cache->addCacheableDependency($definition);
       }
     }
-    if (!X402PriceItem::find($entity, $viewMode)) {
-      return $this->delivery->markdownText($entity, $viewMode);
+    $display = EntityViewDisplay::collectRenderDisplay($entity, $viewMode);
+    $cache->addCacheableDependency($display);
+    $item = X402PriceItem::find($entity)
+      ?? X402PriceItem::find($entity, 'full')
+      ?? X402PriceItem::find($entity, $viewMode)
+      ?? X402PriceItem::find($entity, $display->getMode());
+    if (!$item) {
+      return $this->delivery->markdownText($entity, $viewMode, $cache);
     }
-    $url = Url::fromRoute('x402_pay.entity', [
+    $options = ['absolute' => TRUE, 'language' => $this->languageManager->getLanguage($langcode)];
+    $url = $item->isCanonical() ? $entity->toUrl('canonical', $options) : Url::fromRoute('x402_pay.entity', [
       'entity_type' => $entity->getEntityTypeId(),
       'entity' => $entity->id(),
-      'view_mode' => $viewMode,
-    ], ['absolute' => TRUE, 'language' => $this->languageManager->getLanguage($langcode)]);
+      'view_mode' => $item->viewMode(),
+    ], $options);
     $url = $url->toString(TRUE);
     $cache->addCacheableDependency($url);
     return '# ' . $entity->label() . "\n\nSold with x402: " . $url->getGeneratedUrl();
@@ -126,7 +141,8 @@ final class AgentHomeController implements ContainerInjectionInterface {
    * What the site sells, one link each, and where its terms are.
    */
   private function sold(Request $request, string $langcode, CacheableMetadata $cache): string {
-    $items = $this->catalog->items($request, $cache->addCacheTags(['entity_field_info']));
+    // In the page's language: /es.md is not a prefix to core's negotiation.
+    $items = $this->catalog->items($request, $cache->addCacheTags(['entity_field_info']), $langcode);
     if (!$items) {
       return '';
     }

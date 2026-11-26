@@ -140,6 +140,26 @@ final class AgentHomeTest extends BrowserTestBase {
   }
 
   /**
+   * A page sold on its own URL, or in full, is not free at /index.md.
+   *
+   * The home page shows the page in another display, but the fields sold
+   * there are the same: it links to the product instead.
+   */
+  public function testPageSoldElsewhereIsOnlyLinked(): void {
+    // Sold on its own URL (the field's defaults: full, canonical).
+    $this->home->set('field_price', ['enabled' => 1])->save();
+    $this->drupalGet('index.md');
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->responseNotContains('Welcome body');
+    $this->assertSession()->responseContains('Sold with x402: ');
+    // Sold in full at its x402 URL only.
+    FieldConfig::loadByName('node', 'page', 'field_price')->setSetting('canonical', FALSE)->save();
+    $this->drupalGet('index.md');
+    $this->assertSession()->responseNotContains('Welcome body');
+    $this->assertSession()->responseContains('/x402/node/' . $this->home->id() . '/full');
+  }
+
+  /**
    * A front page set by its alias (/home), and a chosen page by alias.
    */
   public function testAliases(): void {

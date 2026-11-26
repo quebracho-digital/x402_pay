@@ -33,10 +33,17 @@ final class Catalog {
    *
    * In the shape of a Circle Discovery item.
    *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The visitor's request, which each product is quoted for.
+   * @param \Drupal\Core\Cache\CacheableMetadata $cache
+   *   Collects what the list depends on.
+   * @param string|null $langcode
+   *   The language of labels and links; NULL is the negotiated one.
+   *
    * @return array[]
    *   One Discovery item per product.
    */
-  public function items(Request $request, CacheableMetadata $cache): array {
+  public function items(Request $request, CacheableMetadata $cache, ?string $langcode = NULL): array {
     // ponytail: loads every entity with a price to count products; an index
     // (Search API) when a site sells more than a few thousand. Cached by
     // permissions: a price event varying by anything else must not let this
@@ -51,7 +58,7 @@ final class Catalog {
       }
       $ids = $query->condition($charging)->sort($this->entityTypeManager->getDefinition($entityType)->getKey('id'))->execute();
       foreach ($this->entityTypeManager->getStorage($entityType)->loadMultiple($ids) as $entity) {
-        $entity = $this->entityRepository->getTranslationFromContext($entity);
+        $entity = $this->entityRepository->getTranslationFromContext($entity, $langcode);
         $access = $entity->access('view', NULL, TRUE);
         $cache->addCacheableDependency($entity)->addCacheableDependency($access);
         if ($access->isAllowed()) {
@@ -59,7 +66,7 @@ final class Catalog {
             $quote = $this->delivery->quote($request, $entity, $item);
             try {
               if (!$quote->isDenied()) {
-                $items[] = $this->item($entity, $item, $quote);
+                $items[] = $this->item($entity, $item, $quote, $cache);
               }
             }
             catch (\RuntimeException | \InvalidArgumentException) {
@@ -76,7 +83,7 @@ final class Catalog {
   /**
    * One product in the shape of a Circle Discovery item.
    */
-  private function item($entity, X402PriceItem $item, PriceEvent $quote): array {
+  private function item($entity, X402PriceItem $item, PriceEvent $quote, CacheableMetadata $cache): array {
     $url = $item->isCanonical()
       ? $entity->toUrl('canonical', ['absolute' => TRUE])
       : Url::fromRoute('x402_pay.entity', [
@@ -84,8 +91,11 @@ final class Catalog {
         'entity' => $entity->id(),
         'view_mode' => $item->viewMode(),
       ], ['absolute' => TRUE, 'language' => $entity->language()]);
+    // An alias or a language prefix in the link: its own cache metadata.
+    $url = $url->toString(TRUE);
+    $cache->addCacheableDependency($url);
     return [
-      'resource' => $url->toString(TRUE)->getGeneratedUrl(),
+      'resource' => $url->getGeneratedUrl(),
       'type' => 'http',
       'x402Version' => 2,
       'lastUpdated' => $entity instanceof EntityChangedInterface ? date('c', $entity->getChangedTime()) : NULL,
