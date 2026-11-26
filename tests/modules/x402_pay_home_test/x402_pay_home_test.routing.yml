@@ -1,0 +1,24 @@
+# A module's own page and its markdown, the way Markdownify reads ".md":
+# the same path in the markdown format, and the same under /markdownify.
+x402_pay_home_test.page:
+  path: '/x402-test/page'
+  defaults:
+    _controller: '\Drupal\x402_pay_home_test\Controller\PageController::html'
+  requirements:
+    _access: 'TRUE'
+
+x402_pay_home_test.page_markdown:
+  path: '/x402-test/page'
+  defaults:
+    _controller: '\Drupal\x402_pay_home_test\Controller\PageController::markdown'
+  requirements:
+    _access: 'TRUE'
+    _format: 'markdown'
+
+x402_pay_home_test.page_markdownify:
+  path: '/markdownify/x402-test/page'
+  defaults:
+    _controller: '\Drupal\x402_pay_home_test\Controller\PageController::markdown'
+  requirements:
+    _access: 'TRUE'
+    _format: 'markdown'

@@ -95,6 +95,11 @@ services:
     arguments: ['@config.factory']
     tags:
       - { name: path_processor_inbound, priority: 160 }
+  # Before core's format filter, which keeps routes of the request's format.
+  x402_pay.markdown_format_route_filter:
+    class: Drupal\x402_pay\Routing\MarkdownFormatRouteFilter
+    tags:
+      - { name: route_filter, priority: 100 }
   x402_pay.page_cache_request_policy:
     class: Drupal\x402_pay\PageCache\AgentRequestPolicy
     tags:

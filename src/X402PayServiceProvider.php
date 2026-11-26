@@ -14,7 +14,8 @@ use Drupal\Core\DependencyInjection\ServiceProviderBase;
  * its own routes, which the gate charges as the entity's page. Ours, which
  * runs first, would take the ".md" off before Markdownify sees it: two ways
  * of reading one path, one winning by priority. Without Markdownify ours
- * stays, and the gate converts free pages itself.
+ * stays, with the filter that gives a ".md" the markdown format, and the
+ * gate converts free pages itself.
  */
 final class X402PayServiceProvider extends ServiceProviderBase {
 
@@ -24,6 +25,7 @@ final class X402PayServiceProvider extends ServiceProviderBase {
   public function alter(ContainerBuilder $container): void {
     if (isset($container->getParameter('container.modules')['markdownify'])) {
       $container->removeDefinition('x402_pay.markdown_path_processor');
+      $container->removeDefinition('x402_pay.markdown_format_route_filter');
     }
   }
 

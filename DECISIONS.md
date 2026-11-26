@@ -26,6 +26,45 @@
 6. **Written down.** Each decision below says what was rejected and when to
    revisit it. Scope and releases are the maintainer's call.
 
+## 2026-11-26 (unreleased)
+
+### With Markdownify, the format is Markdownify's and the charge ours
+
+Markdownify reads `.md`, `?_format=markdown` and `Accept: text/markdown` as
+the markdown format of core's routing, and adds a route in that format for
+each page it converts. Our own `.md` processor ran first and took the `.md`
+off, so one path was read two ways and one won by priority; and the gate
+took Markdownify's twins of an entity's page for any other route, charging
+anything the entity sells (a free page selling only its teaser answered 402
+at `/node/1.md`).
+
+- **Now:** with Markdownify enabled, our `.md` processor and format filter
+  are not registered (`X402PayServiceProvider`); the gate charges on
+  Markdownify's twins what the page charges, and leaves free pages to it.
+  Without Markdownify, a `.md` path asks for the markdown format too, so a
+  module answers its own pages the same way in both cases: a route that
+  requires `_format: markdown`.
+- **Rejected:** depending on Markdownify (still not needed to sell); a
+  patch or an event in Markdownify (its routes and format already are the
+  extension point); a request subscriber per module for its `.md`.
+- **Limit:** with Markdownify, a bundle it does not convert answers its
+  `.md` with 403 from Markdownify's access check, before the gate: enable it
+  on the bundles that sell.
+
+### A home page for agents, at /index.md
+
+Decided by Leo (2026-11-26): the module serves the front page as markdown,
+so no issue is opened in Markdownify, which has none, and a site can tell
+agents something other than what people see. A page chosen in the settings
+(the front page by default), in the `agent` view mode, the catalogue, and
+sections from other modules (`AgentHomeEvent`).
+
+- **Not `/.md`:** web servers refuse paths starting with a dot.
+- **Rejected:** a text field in the settings (a page in a view mode is
+  edited, translated and access-checked like any other); rendering the front
+  page's route whatever it is (only an entity's page; a view or controller
+  gets the site name and the sections).
+
 ## 2026-11-23 (1.0.0-beta6)
 
 ### The module follows the library to 0.6

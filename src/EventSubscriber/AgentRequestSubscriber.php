@@ -66,8 +66,9 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
       $this->answerAgent($event, $entity);
     }
     // A .md path is markdown or a sale, never the HTML page under its name;
-    // a route that answers markdown itself (Markdownify's) answers it.
-    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse() && $request->getRequestFormat() !== 'markdown') {
+    // a route that answers markdown itself (Markdownify's, another module's
+    // in the markdown format) answers it.
+    if ($event->isMainRequest() && MarkdownPathProcessor::asked($request) && !$event->hasResponse() && !$this->answersMarkdown($request)) {
       throw new NotFoundHttpException();
     }
   }
@@ -169,6 +170,14 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
    */
   private function isCanonical(Request $request): bool {
     return (bool) preg_match('/^entity\.\w+\.canonical$/', (string) $request->attributes->get('_route'));
+  }
+
+  /**
+   * Whether the route is one in the markdown format, which answers itself.
+   */
+  private function answersMarkdown(Request $request): bool {
+    $route = $request->attributes->get('_route_object');
+    return $route && in_array('markdown', explode('|', (string) $route->getRequirement('_format')), TRUE);
   }
 
   /**
