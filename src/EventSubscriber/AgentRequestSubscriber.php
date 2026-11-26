@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\x402_pay\EventSubscriber;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Entity\Entity\EntityViewDisplay;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Url;
@@ -88,7 +89,7 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     // its x402 URL, since that markdown is the product. Elsewhere (JSON:API,
     // REST) the route can show any field, so anything sold is charged.
     $item = $page
-      ? $here ?? ($markdown ? X402PriceItem::find($entity, self::PAGE) : NULL)
+      ? $here ?? ($markdown ? $this->soldMarkdown($request, $entity) : NULL)
       : X402PriceItem::find($entity) ?? X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::all($entity)[0] ?? NULL;
     if ($item && $this->isAgent($request)) {
       // The resource bought: the own URL for what is sold there, else the
@@ -101,6 +102,23 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
     }
+  }
+
+  /**
+   * What a field sells of the page's markdown, if anything.
+   *
+   * The markdown shows a view mode: "full" here, or on Markdownify's routes
+   * the one its settings give the bundle. Sold in that mode, or in the
+   * display it falls back to (default), it is the product.
+   */
+  private function soldMarkdown(Request $request, FieldableEntityInterface $entity): ?X402PriceItem {
+    $mode = self::PAGE;
+    if (!$this->isCanonical($request)) {
+      $modes = $this->configFactory->get('markdownify.settings')->get('supported_entities.' . $entity->getEntityTypeId() . '.view_modes');
+      $mode = (string) ($modes[$entity->bundle()] ?? self::PAGE);
+    }
+    $shown = EntityViewDisplay::collectRenderDisplay($entity, $mode)->getMode();
+    return X402PriceItem::find($entity, self::PAGE) ?? X402PriceItem::find($entity, $mode) ?? X402PriceItem::find($entity, $shown);
   }
 
   /**

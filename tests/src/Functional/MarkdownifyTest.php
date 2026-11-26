@@ -170,6 +170,36 @@ final class MarkdownifyTest extends BrowserTestBase {
   }
 
   /**
+   * The view mode Markdownify renders is charged when it is sold.
+   *
+   * Markdownify renders the mode set per bundle in its settings, not "full":
+   * when a field sells that mode at its x402 URL, its routes charge it.
+   */
+  public function testViewModeMarkdownifyRendersIsChargedWhenSold(): void {
+    $field = FieldConfig::loadByName('node', 'page', 'field_price');
+    $field->setSetting('view_mode', 'teaser')->setSetting('canonical', FALSE)->save();
+    $this->markdownify();
+    $this->config('markdownify.settings')->set('supported_entities.node.view_modes', ['page' => 'teaser'])->save();
+    $node = Node::create([
+      'type' => 'page',
+      'title' => 'Guide',
+      'body' => 'Sold teaser body',
+      'field_price' => ['enabled' => 1],
+    ]);
+    $node->save();
+    $path = 'node/' . $node->id();
+    foreach ([
+      "$path.md" => self::BROWSER,
+      "markdownify/$path" => self::BROWSER,
+      $path => 'text/markdown,' . self::BROWSER,
+    ] as $url => $accept) {
+      $this->drupalGet($url, [], ['Accept' => $accept]);
+      $this->assertSame(402, $this->getSession()->getStatusCode(), $url);
+      $this->assertStringNotContainsString('Sold teaser body', $this->getSession()->getPage()->getContent(), $url);
+    }
+  }
+
+  /**
    * What a visitor may not see is neither sold nor converted.
    */
   public function testUnpublishedIsDenied(): void {
