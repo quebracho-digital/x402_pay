@@ -60,7 +60,12 @@ final class AgentHomeTest extends BrowserTestBase {
       'settings' => ['key_id' => 'seller'],
     ])->save();
     Role::load(AccountInterface::ANONYMOUS_ROLE)->grantPermission('access content')->save();
-    $this->home = Node::create(['type' => 'page', 'title' => 'Hotel Home', 'body' => 'Welcome body', 'field_price' => ['enabled' => 0]]);
+    $this->home = Node::create([
+      'type' => 'page',
+      'title' => 'Hotel Home',
+      'body' => 'Welcome body',
+      'field_price' => ['enabled' => 0],
+    ]);
     $this->home->save();
     $this->config('system.site')->set('page.front', '/node/' . $this->home->id())->save();
   }
@@ -98,7 +103,12 @@ final class AgentHomeTest extends BrowserTestBase {
    * Another page chosen for agents, and what the site sells below it.
    */
   public function testChosenPageAndCatalogue(): void {
-    $agents = Node::create(['type' => 'page', 'title' => 'For agents', 'body' => 'How to book', 'field_price' => ['enabled' => 0]]);
+    $agents = Node::create([
+      'type' => 'page',
+      'title' => 'For agents',
+      'body' => 'How to book',
+      'field_price' => ['enabled' => 0],
+    ]);
     $agents->save();
     $sold = Node::create(['type' => 'page', 'title' => 'Premium guide', 'field_price' => ['enabled' => 1]]);
     $sold->save();

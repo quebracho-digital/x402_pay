@@ -34,6 +34,7 @@ final class Catalog {
    * In the shape of a Circle Discovery item.
    *
    * @return array[]
+   *   One Discovery item per product.
    */
   public function items(Request $request, CacheableMetadata $cache): array {
     // ponytail: loads every entity with a price to count products; an index

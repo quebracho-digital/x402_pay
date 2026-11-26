@@ -9,7 +9,7 @@ use Drupal\Core\PathProcessor\InboundPathProcessorInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * /index.md, and /es.md in each language, is the home page for agents.
+ * The home page for agents: /index.md, and /es.md in each language.
  *
  * Not /.md: web servers refuse paths starting with a dot (Drupal's
  * .htaccess and its nginx recipes), so it would never reach Drupal.
@@ -38,8 +38,13 @@ final class AgentHomePathProcessor implements InboundPathProcessorInterface {
   /**
    * The language a home path asks for: '' for /index.md, NULL if not one.
    *
+   * @param string $path
+   *   A path, after the language prefix was looked for.
    * @param array<string, string> $prefixes
    *   URL prefixes by langcode, as language.negotiation keeps them.
+   *
+   * @return string|null
+   *   The langcode, '' for /index.md, or NULL.
    */
   public static function langcode(string $path, array $prefixes): ?string {
     if ($path === '/index.md') {
@@ -56,6 +61,7 @@ final class AgentHomePathProcessor implements InboundPathProcessorInterface {
    * The site's URL prefixes by langcode; none without the language module.
    *
    * @return array<string, string>
+   *   URL prefixes by langcode.
    */
   public function prefixes(): array {
     return (array) ($this->configFactory->get('language.negotiation')->get('url.prefixes') ?? []);

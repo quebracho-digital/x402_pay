@@ -134,7 +134,10 @@ final class AgentHomeController implements ContainerInjectionInterface {
     foreach ($items as $item) {
       $lines[] = '- [' . $item['metadata']['description'] . '](' . $item['resource'] . ')';
     }
-    $discovery = Url::fromRoute('x402_pay.discovery', [], ['absolute' => TRUE, 'language' => $this->languageManager->getLanguage($langcode)])->toString(TRUE);
+    $discovery = Url::fromRoute('x402_pay.discovery', [], [
+      'absolute' => TRUE,
+      'language' => $this->languageManager->getLanguage($langcode),
+    ])->toString(TRUE);
     $cache->addCacheableDependency($discovery);
     $discovery = $discovery->getGeneratedUrl();
     $lines[] = '';

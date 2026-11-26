@@ -44,6 +44,7 @@ final class AgentHomeEvent extends Event {
    * The sections in order.
    *
    * @return string[]
+   *   Markdown, lighter weights first.
    */
   public function sections(): array {
     ksort($this->sections);
