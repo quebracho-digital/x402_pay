@@ -1,0 +1,5 @@
+services:
+  x402_pay_home_test.subscriber:
+    class: Drupal\x402_pay_home_test\EventSubscriber\HomeSubscriber
+    tags:
+      - { name: event_subscriber }
