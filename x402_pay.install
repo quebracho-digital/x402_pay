@@ -167,7 +167,7 @@ function x402_pay_update_10008(): void {
 }
 
 /**
- * Adds the home page for agents (/.md) to the settings.
+ * Adds the home page for agents (/index.md) to the settings.
  */
 function x402_pay_update_10009(): void {
   $config = \Drupal::configFactory()->getEditable('x402_pay.settings');

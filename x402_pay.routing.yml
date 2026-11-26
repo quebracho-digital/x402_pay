@@ -19,6 +19,17 @@ x402_pay.discovery:
     # Public: the catalogue lists only what the visitor can see and buy.
     _access: 'TRUE'
 
+x402_pay.agent_home:
+  # Reached at /index.md and /{prefix}.md (AgentHomePathProcessor).
+  path: '/x402/agent-home'
+  defaults:
+    _controller: '\Drupal\x402_pay\Controller\AgentHomeController'
+  methods: [GET]
+  requirements:
+    # Public: each section shows only what the visitor may see.
+    _access: 'TRUE'
+    _format: 'markdown'
+
 x402_pay.settings:
   path: '/admin/config/services/x402'
   defaults:

@@ -169,6 +169,13 @@ class Delivery {
    * author and date, which the template shows), nor the price itself.
    */
   public function markdown(FieldableEntityInterface $entity, string $viewMode): Response {
+    return new Response($this->markdownText($entity, $viewMode), 200, ['Content-Type' => 'text/markdown; charset=utf-8']);
+  }
+
+  /**
+   * The markdown of markdown(), as text: for pages that put it with more.
+   */
+  public function markdownText(FieldableEntityInterface $entity, string $viewMode): string {
     $build = EntityViewDisplay::collectRenderDisplay($entity, $viewMode)->build($entity);
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
       if ($definition->getType() === 'x402_price' || !$definition->isDisplayConfigurable('view')) {
@@ -179,7 +186,7 @@ class Delivery {
     $body = (new HtmlConverter(['strip_tags' => TRUE, 'remove_nodes' => 'script style', 'hard_break' => TRUE]))->convert($html);
     // Field wrappers leave runs of blank (or space-only) lines: one is enough.
     $body = preg_replace('/\n(?:[ \t\x{a0}]*\n){2,}/u', "\n\n", $body);
-    return new Response(trim('# ' . $entity->label() . "\n\n" . $body) . "\n", 200, ['Content-Type' => 'text/markdown; charset=utf-8']);
+    return trim('# ' . $entity->label() . "\n\n" . $body) . "\n";
   }
 
 }

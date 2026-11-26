@@ -181,7 +181,7 @@ final class SettingsForm extends ConfigFormBase {
     $form['agent_home'] = [
       '#type' => 'details',
       '#title' => $this->t('Home page for agents'),
-      '#description' => $this->t('What an agent reads at /.md, and at /es.md and so on in each language.'),
+      '#description' => $this->t('What an agent reads at /index.md, and at /es.md and so on in each language.'),
       'agent_home_path' => [
         '#type' => 'textfield',
         '#title' => $this->t('Page'),

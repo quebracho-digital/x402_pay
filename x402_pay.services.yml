@@ -88,6 +88,13 @@ services:
       # After the language prefix (300) and private files (200, which turns
       # /system/files/a.md into a query), before aliases (100).
       - { name: path_processor_inbound, priority: 150 }
+  # /index.md and /{prefix}.md are the home page for agents. Before our .md
+  # processor (150) and Markdownify's (100), which would read them as pages.
+  x402_pay.agent_home_path_processor:
+    class: Drupal\x402_pay\PathProcessor\AgentHomePathProcessor
+    arguments: ['@config.factory']
+    tags:
+      - { name: path_processor_inbound, priority: 160 }
   x402_pay.page_cache_request_policy:
     class: Drupal\x402_pay\PageCache\AgentRequestPolicy
     tags:
