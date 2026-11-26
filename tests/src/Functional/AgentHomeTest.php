@@ -140,6 +140,27 @@ final class AgentHomeTest extends BrowserTestBase {
   }
 
   /**
+   * A front page set by its alias (/home), and a chosen page by alias.
+   */
+  public function testAliases(): void {
+    $this->container->get('module_installer')->install(['path']);
+    $this->rebuildContainer();
+    $this->container->get('entity_type.manager')->getStorage('path_alias')->create([
+      'path' => '/node/' . $this->home->id(),
+      'alias' => '/home',
+    ])->save();
+    $this->config('system.site')->set('page.front', '/home')->save();
+    $this->drupalGet('index.md');
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->responseContains('# Hotel Home');
+    // The same alias as the page chosen for agents.
+    $this->config('system.site')->set('page.front', '/user/login')->save();
+    $this->config('x402_pay.settings')->set('agent_home.path', '/home')->save();
+    $this->drupalGet('index.md');
+    $this->assertSession()->responseContains('# Hotel Home');
+  }
+
+  /**
    * Each language's prefix plus ".md"; any other ".md" is not the home page.
    */
   public function testLanguages(): void {
