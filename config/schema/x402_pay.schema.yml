@@ -62,6 +62,19 @@ x402_pay.settings:
         interval:
           type: integer
           label: 'Seconds between sweeps'
+    agent_home:
+      type: mapping
+      label: 'Home page for agents'
+      mapping:
+        path:
+          type: string
+          label: 'Internal path of an entity page; empty is the front page'
+        view_mode:
+          type: string
+          label: 'View mode'
+        catalog:
+          type: boolean
+          label: 'List what is sold'
 
 field.storage_settings.x402_price:
   type: mapping

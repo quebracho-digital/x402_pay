@@ -31,3 +31,12 @@ sweep:
   keys: []
   min: '1'
   interval: 21600
+# What an agent reads at /.md, and at /es.md in each language. path: an
+# internal path of an entity's page (e.g. /node/12); empty is the site's
+# front page. view_mode: the display shown, falling back to the default
+# display when the entity type does not have it enabled. catalog: whether to
+# list what this site sells below it.
+agent_home:
+  path: ''
+  view_mode: agent
+  catalog: true
