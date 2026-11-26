@@ -177,6 +177,45 @@ final class AgentHomeTest extends BrowserTestBase {
   }
 
   /**
+   * The home page's own page reads as the home page: one for agents.
+   *
+   * By its path, by its alias, and with Markdownify, which converts every
+   * other page.
+   */
+  public function testHomePageOwnMarkdownIsTheHomePage(): void {
+    Node::create(['type' => 'page', 'title' => 'Premium guide', 'field_price' => ['enabled' => 1]])->save();
+    $this->drupalGet('index.md');
+    $home = $this->getSession()->getPage()->getContent();
+    $this->assertStringContainsString('## Sold here with x402', $home);
+    $this->container->get('module_installer')->install(['path']);
+    $this->rebuildContainer();
+    $this->container->get('entity_type.manager')->getStorage('path_alias')->create([
+      'path' => '/node/' . $this->home->id(),
+      'alias' => '/home',
+    ])->save();
+    $urls = ['node/' . $this->home->id() . '.md', 'home.md'];
+    foreach ($urls as $url) {
+      $this->drupalGet($url);
+      $this->assertSession()->statusCodeEquals(200);
+      $this->assertSame($home, $this->getSession()->getPage()->getContent(), $url);
+    }
+    // Another page is still itself.
+    $this->drupalGet('node/' . ($this->home->id() + 1) . '.md');
+    $this->assertSession()->statusCodeEquals(402);
+    $markdownify = $this->container->get('extension.list.module')->getList()['markdownify'] ?? NULL;
+    if (!$markdownify || !empty($markdownify->info['core_incompatible'])) {
+      return;
+    }
+    $this->container->get('module_installer')->install(['markdownify']);
+    $this->rebuildContainer();
+    foreach (['node/' . $this->home->id() . '.md', 'markdownify/node/' . $this->home->id()] as $url) {
+      $this->drupalGet($url);
+      $this->assertSession()->statusCodeEquals(200);
+      $this->assertSame($home, $this->getSession()->getPage()->getContent(), $url);
+    }
+  }
+
+  /**
    * A front page set by its alias (/home), and a chosen page by alias.
    */
   public function testAliases(): void {

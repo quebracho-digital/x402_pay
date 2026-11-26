@@ -68,6 +68,10 @@ agents something other than what people see. A page chosen in the settings
 sections from other modules (`AgentHomeEvent`).
 
 - **Not `/.md`:** web servers refuse paths starting with a dot.
+- **One home page:** decided by Leo (2026-11-26), translated from his
+  Spanish: the front page's own `.md` (`/es/home.md`) answers the same as
+  `/es.md`. Agents that know the page's address and those that guess
+  `/index.md` read the same thing.
 - **Sold, linked:** if the page is sold anywhere its markdown is (its own
   URL, `full`, or the display shown), the home page links the product.
 - **In English:** the module's own lines (`Sold here with x402`) are for

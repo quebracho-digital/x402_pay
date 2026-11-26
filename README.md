@@ -178,7 +178,8 @@ Drupal module that charges for any response over HTTP 402 (x402), in USDC on
   its default display; then what the site sells, one link each, with the
   link to `/x402/discovery`. Other modules add sections (how to book, an MCP
   endpoint) by listening to `AgentHomeEvent`. A view mode that is sold is
-  linked there, never shown free. Markdownify has no front page, so the two
+  linked there, never shown free. That page's own `.md` (`/es/home.md`)
+  answers the same home page: one for agents, however they reach it. Markdownify has no front page, so the two
   do not meet.
 - **With Markdownify:** not needed (it converts with the same library,
   `league/html-to-markdown`), and both can be enabled. Then `.md` paths are

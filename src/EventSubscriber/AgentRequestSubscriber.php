@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\Core\Url;
+use Drupal\x402_pay\AgentHome;
 use Drupal\x402_pay\Delivery;
 use Drupal\x402_pay\PathProcessor\MarkdownPathProcessor;
 use Quebracho\X402\PaymentHeaders;
@@ -42,6 +43,7 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
     private readonly Delivery $delivery,
     private readonly ConfigFactoryInterface $configFactory,
     private readonly KillSwitch $pageCacheKillSwitch,
+    private readonly AgentHome $agentHome,
   ) {}
 
   /**
@@ -95,8 +97,13 @@ final class AgentRequestSubscriber implements EventSubscriberInterface {
       // x402 URL of the product.
       $event->setResponse($this->delivery->charge($request, $entity, $item, $here !== NULL));
     }
-    // Free: neither this URL nor the page's markdown is sold. A route that
-    // answers markdown itself (Markdownify's) converts it its own way.
+    // Free: neither this URL nor the page's markdown is sold. The home page's
+    // own page reads as the home page for agents (/es/home.md as /es.md); a
+    // route that answers markdown itself (Markdownify's) converts the rest.
+    elseif (!$item && $markdown && $this->agentHome->isHome($entity)) {
+      $this->pageCacheKillSwitch->trigger();
+      $event->setResponse($this->agentHome->response($request));
+    }
     elseif (!$item && $markdown && $this->isCanonical($request)) {
       $this->pageCacheKillSwitch->trigger();
       $event->setResponse($this->delivery->markdown($entity, self::PAGE));
